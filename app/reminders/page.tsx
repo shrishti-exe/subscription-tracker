@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useStore } from "@/lib/store";
-import { getUpcomingRenewals, getDaysUntilRenewal, getTotalMonthly } from "@/lib/mockData";
+import { getUpcomingRenewals, getDaysUntilRenewal, computeNextRenewal } from "@/lib/mockData";
 
 export default function RemindersPage() {
   const { subscriptions, alertPreferences, updateAlertPreferences } = useStore();
@@ -11,8 +11,8 @@ export default function RemindersPage() {
   const upcoming7 = getUpcomingRenewals(active, 7);
   const upcomingWeeklyTotal = upcoming7.reduce((sum, s) => sum + s.amount, 0);
 
-  const getRenewalLabel = (dateStr: string) => {
-    const days = getDaysUntilRenewal(dateStr);
+  const getRenewalLabel = (startDate: string, billingCycle: import("@/types").BillingCycle) => {
+    const days = getDaysUntilRenewal(startDate, billingCycle);
     if (days === 0) return { text: "Today", cls: "text-error font-bold" };
     if (days === 1) return { text: "Tomorrow", cls: "text-tertiary font-bold" };
     if (days <= 3) return { text: "Urgent Alert", cls: "text-tertiary font-bold tracking-widest uppercase text-[10px]" };
@@ -22,12 +22,11 @@ export default function RemindersPage() {
 
   return (
     <div className="max-w-6xl mx-auto px-6 pt-8 pb-24 md:pb-12">
-      {/* Page Title */}
       <div className="mb-10">
         <h2 className="font-headline text-3xl font-extrabold text-on-surface tracking-tight">
           Renewal Intelligence
         </h2>
-        <p className="text-on-surface-variant mt-1">Smart reminders for your curated subscriptions.</p>
+        <p className="text-on-surface-variant mt-1">Smart reminders for your subscriptions.</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
@@ -54,8 +53,8 @@ export default function RemindersPage() {
                 </div>
               ) : (
                 upcoming7.map((sub) => {
-                  const label = getRenewalLabel(sub.nextRenewal);
-                  const days = getDaysUntilRenewal(sub.nextRenewal);
+                  const label = getRenewalLabel(sub.startDate, sub.billingCycle);
+                  const days = getDaysUntilRenewal(sub.startDate, sub.billingCycle);
                   return (
                     <Link
                       key={sub.id}
@@ -116,18 +115,14 @@ export default function RemindersPage() {
               <div className="flex items-center justify-between">
                 <div className="pr-4">
                   <p className="font-bold text-on-surface">Push Notifications</p>
-                  <p className="text-xs text-on-surface-variant">
-                    Immediate alerts on your devices
-                  </p>
+                  <p className="text-xs text-on-surface-variant">Immediate alerts on your devices</p>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer">
                   <input
                     type="checkbox"
                     className="sr-only peer"
                     checked={alertPreferences.pushNotifications}
-                    onChange={(e) =>
-                      updateAlertPreferences({ pushNotifications: e.target.checked })
-                    }
+                    onChange={(e) => updateAlertPreferences({ pushNotifications: e.target.checked })}
                   />
                   <div className="w-11 h-6 bg-surface-container-high rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary" />
                 </label>
@@ -136,19 +131,15 @@ export default function RemindersPage() {
               {/* Email Toggle */}
               <div className="flex items-center justify-between">
                 <div className="pr-4">
-                  <p className="font-bold text-on-surface">Email Intelligence</p>
-                  <p className="text-xs text-on-surface-variant">
-                    Weekly summaries and billing alerts
-                  </p>
+                  <p className="font-bold text-on-surface">Email Alerts</p>
+                  <p className="text-xs text-on-surface-variant">Weekly summaries and billing reminders</p>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer">
                   <input
                     type="checkbox"
                     className="sr-only peer"
                     checked={alertPreferences.emailAlerts}
-                    onChange={(e) =>
-                      updateAlertPreferences({ emailAlerts: e.target.checked })
-                    }
+                    onChange={(e) => updateAlertPreferences({ emailAlerts: e.target.checked })}
                   />
                   <div className="w-11 h-6 bg-surface-container-high rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary" />
                 </label>
@@ -160,11 +151,7 @@ export default function RemindersPage() {
                 <div className="flex items-center justify-between bg-white p-2 rounded-xl mb-3">
                   <button
                     className="w-10 h-10 flex items-center justify-center rounded-lg hover:bg-surface-container transition-colors"
-                    onClick={() =>
-                      updateAlertPreferences({
-                        advanceDays: Math.max(1, alertPreferences.advanceDays - 1),
-                      })
-                    }
+                    onClick={() => updateAlertPreferences({ advanceDays: Math.max(1, alertPreferences.advanceDays - 1) })}
                   >
                     <span className="material-symbols-outlined text-sm">remove</span>
                   </button>
@@ -172,23 +159,17 @@ export default function RemindersPage() {
                     <span className="text-2xl font-extrabold font-headline text-primary">
                       {alertPreferences.advanceDays}
                     </span>
-                    <span className="text-xs font-bold text-on-surface-variant ml-1">
-                      Days Before
-                    </span>
+                    <span className="text-xs font-bold text-on-surface-variant ml-1">Days Before</span>
                   </div>
                   <button
                     className="w-10 h-10 flex items-center justify-center rounded-lg hover:bg-surface-container transition-colors"
-                    onClick={() =>
-                      updateAlertPreferences({
-                        advanceDays: Math.min(30, alertPreferences.advanceDays + 1),
-                      })
-                    }
+                    onClick={() => updateAlertPreferences({ advanceDays: Math.min(30, alertPreferences.advanceDays + 1) })}
                   >
                     <span className="material-symbols-outlined text-sm">add</span>
                   </button>
                 </div>
                 <p className="text-[10px] text-on-surface-variant italic">
-                  Default setting for all active subscriptions.
+                  Alert sent this many days before each renewal.
                 </p>
               </div>
 
@@ -210,9 +191,7 @@ export default function RemindersPage() {
                   type="checkbox"
                   className="sr-only peer"
                   checked={alertPreferences.quietMode}
-                  onChange={(e) =>
-                    updateAlertPreferences({ quietMode: e.target.checked })
-                  }
+                  onChange={(e) => updateAlertPreferences({ quietMode: e.target.checked })}
                 />
                 <div className="w-11 h-6 bg-surface-container-high rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary" />
               </label>

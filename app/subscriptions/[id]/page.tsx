@@ -3,7 +3,7 @@
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useStore } from "@/lib/store";
-import { getDaysUntilRenewal } from "@/lib/mockData";
+import { computeNextRenewal, getDaysUntilRenewal, generatePaymentHistory } from "@/lib/mockData";
 
 const CATEGORY_ICONS: Record<string, string> = {
   Entertainment: "movie",
@@ -18,14 +18,8 @@ const CATEGORY_ICONS: Record<string, string> = {
 
 function SpendingChart({ payments }: { payments: { date: string; amount: number; status: string }[] }) {
   if (payments.length === 0) return null;
-
   const successful = payments.filter((p) => p.status !== "failed").slice(0, 6).reverse();
   const maxAmount = Math.max(...successful.map((p) => p.amount), 1);
-
-  const months = successful.map((p) => {
-    const d = new Date(p.date);
-    return d.toLocaleDateString("en-US", { month: "short" }).toUpperCase();
-  });
 
   return (
     <div className="relative h-64 w-full mt-4 flex items-end gap-2">
@@ -37,22 +31,17 @@ function SpendingChart({ payments }: { payments: { date: string; amount: number;
       {successful.map((p, i) => {
         const heightPct = (p.amount / maxAmount) * 90 + 10;
         const isLast = i === successful.length - 1;
+        const month = new Date(p.date).toLocaleDateString("en-US", { month: "short" }).toUpperCase();
         return (
           <div key={i} className="flex-1 flex flex-col items-center justify-end gap-2 group">
             <div
               className={`w-full rounded-t-lg transition-all ${
-                isLast
-                  ? "bg-primary shadow-lg shadow-primary/30"
-                  : "bg-primary/20 group-hover:bg-primary"
+                isLast ? "bg-primary shadow-lg shadow-primary/30" : "bg-primary/20 group-hover:bg-primary"
               }`}
               style={{ height: `${heightPct}%` }}
             />
-            <span
-              className={`text-[10px] font-label ${
-                isLast ? "font-bold text-primary" : "text-on-surface-variant"
-              }`}
-            >
-              {months[i]}
+            <span className={`text-[10px] font-label ${isLast ? "font-bold text-primary" : "text-on-surface-variant"}`}>
+              {month}
             </span>
           </div>
         );
@@ -64,7 +53,7 @@ function SpendingChart({ payments }: { payments: { date: string; amount: number;
 export default function SubscriptionDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const { subscriptions, cancelSubscription, updateSubscription } = useStore();
+  const { subscriptions, cancelSubscription, updateSubscription, deleteSubscription } = useStore();
 
   const sub = subscriptions.find((s) => s.id === params.id);
 
@@ -79,8 +68,16 @@ export default function SubscriptionDetailPage() {
     );
   }
 
-  const daysLeft = getDaysUntilRenewal(sub.nextRenewal);
-  const yearToDate = sub.paymentHistory
+  const nextRenewal = computeNextRenewal(sub.startDate, sub.billingCycle);
+  const daysLeft = getDaysUntilRenewal(sub.startDate, sub.billingCycle);
+
+  // Use recorded payment history if available, otherwise generate from start date
+  const payments =
+    sub.paymentHistory.length > 0
+      ? sub.paymentHistory
+      : generatePaymentHistory(sub.id, sub.name, sub.startDate, sub.billingCycle, sub.amount);
+
+  const yearToDate = payments
     .filter(
       (p) =>
         p.status === "success" &&
@@ -88,9 +85,21 @@ export default function SubscriptionDetailPage() {
     )
     .reduce((sum, p) => sum + p.amount, 0);
 
+  // How long they've been subscribed (in months)
+  const startMs = new Date(sub.startDate).getTime();
+  const nowMs = Date.now();
+  const monthsSubscribed = Math.floor((nowMs - startMs) / (1000 * 60 * 60 * 24 * 30.44));
+
   const handleCancel = () => {
-    if (confirm(`Cancel ${sub.name}? This cannot be undone in demo mode.`)) {
+    if (confirm(`Cancel ${sub.name}? This action will mark it as cancelled.`)) {
       cancelSubscription(sub.id);
+      router.push("/subscriptions");
+    }
+  };
+
+  const handleDelete = () => {
+    if (confirm(`Permanently delete ${sub.name}? This cannot be undone.`)) {
+      deleteSubscription(sub.id);
       router.push("/subscriptions");
     }
   };
@@ -121,9 +130,16 @@ export default function SubscriptionDetailPage() {
               className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-error bg-error-container/30 hover:bg-error-container/50 transition-all active:scale-95 font-medium text-sm"
             >
               <span className="material-symbols-outlined text-[20px]">cancel</span>
-              Cancel Subscription
+              Cancel
             </button>
           )}
+          <button
+            onClick={handleDelete}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-error bg-error-container/30 hover:bg-error-container/60 transition-all active:scale-95 font-medium text-sm"
+          >
+            <span className="material-symbols-outlined text-[20px]">delete</span>
+            Delete
+          </button>
         </div>
       </div>
 
@@ -146,13 +162,13 @@ export default function SubscriptionDetailPage() {
               </span>
             </div>
             <p className="text-on-surface-variant font-body mb-4">
-              {sub.billingCycle} subscription
-              {sub.linkedAccount ? ` · ${sub.linkedAccount}` : ""}
+              {sub.billingCycle} billing
+              {monthsSubscribed > 0 ? ` · ${monthsSubscribed} month${monthsSubscribed !== 1 ? "s" : ""} active` : ""}
             </p>
             <div className="flex flex-wrap gap-6">
               <div>
                 <p className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant mb-1">
-                  {sub.billingCycle} Billing
+                  {sub.billingCycle} Amount
                 </p>
                 <p className="text-2xl font-bold font-headline text-primary">
                   ${sub.amount.toFixed(2)}
@@ -163,7 +179,7 @@ export default function SubscriptionDetailPage() {
                   Next Renewal
                 </p>
                 <p className="text-2xl font-bold font-headline text-on-surface">
-                  {new Date(sub.nextRenewal).toLocaleDateString("en-US", {
+                  {new Date(nextRenewal).toLocaleDateString("en-US", {
                     month: "short",
                     day: "numeric",
                     year: "numeric",
@@ -185,16 +201,8 @@ export default function SubscriptionDetailPage() {
               <span className="text-sm font-label font-semibold text-on-surface">
                 Subscription Status
               </span>
-              <div
-                className={`flex items-center gap-1.5 ${
-                  sub.status === "active" ? "text-teal-600" : "text-error"
-                }`}
-              >
-                <span
-                  className={`w-2 h-2 rounded-full ${
-                    sub.status === "active" ? "bg-teal-600" : "bg-error"
-                  }`}
-                />
+              <div className={`flex items-center gap-1.5 ${sub.status === "active" ? "text-teal-600" : "text-error"}`}>
+                <span className={`w-2 h-2 rounded-full ${sub.status === "active" ? "bg-teal-600" : "bg-error"}`} />
                 <span className="text-xs font-bold uppercase">{sub.status}</span>
               </div>
             </div>
@@ -206,17 +214,13 @@ export default function SubscriptionDetailPage() {
               <div className="w-full bg-surface-container rounded-full h-2">
                 <div
                   className="bg-primary h-2 rounded-full"
-                  style={{
-                    width: `${Math.min(100, (daysLeft === 0 ? 100 : ((30 - daysLeft) / 30) * 100))}%`,
-                  }}
+                  style={{ width: `${Math.min(100, Math.max(5, ((30 - daysLeft) / 30) * 100))}%` }}
                 />
               </div>
               <p className="text-[11px] text-on-surface-variant italic">
                 {daysLeft === 0
                   ? "Renews today"
-                  : daysLeft < 0
-                  ? "Overdue"
-                  : `Next bill is due in ${daysLeft} day${daysLeft !== 1 ? "s" : ""}`}
+                  : `Next bill due in ${daysLeft} day${daysLeft !== 1 ? "s" : ""}`}
               </p>
             </div>
           </div>
@@ -234,13 +238,8 @@ export default function SubscriptionDetailPage() {
         <div className="lg:col-span-8 bg-surface-container-lowest rounded-3xl p-8 shadow-sm">
           <div className="flex items-center justify-between mb-8">
             <h3 className="text-xl font-bold font-headline text-on-surface">Spending Trend</h3>
-            <div className="flex bg-surface-container-low p-1 rounded-lg">
-              <button className="px-3 py-1 text-xs font-bold rounded-md bg-white shadow-sm">
-                History
-              </button>
-            </div>
           </div>
-          <SpendingChart payments={sub.paymentHistory} />
+          <SpendingChart payments={payments} />
         </div>
 
         {/* Details Sidebar */}
@@ -253,33 +252,16 @@ export default function SubscriptionDetailPage() {
               <li className="flex items-center gap-3">
                 <span className="material-symbols-outlined text-primary-container">category</span>
                 <div>
-                  <p className="text-[10px] font-label text-on-surface-variant uppercase tracking-tighter">
-                    Category
-                  </p>
+                  <p className="text-[10px] font-label text-on-surface-variant uppercase tracking-tighter">Category</p>
                   <p className="text-sm font-semibold">{sub.category}</p>
                 </div>
               </li>
-              {sub.linkedAccount && (
-                <li className="flex items-center gap-3">
-                  <span className="material-symbols-outlined text-primary-container">
-                    credit_card
-                  </span>
-                  <div>
-                    <p className="text-[10px] font-label text-on-surface-variant uppercase tracking-tighter">
-                      Paid via
-                    </p>
-                    <p className="text-sm font-semibold">{sub.linkedAccount}</p>
-                  </div>
-                </li>
-              )}
               <li className="flex items-center gap-3">
-                <span className="material-symbols-outlined text-primary-container">history</span>
+                <span className="material-symbols-outlined text-primary-container">calendar_today</span>
                 <div>
-                  <p className="text-[10px] font-label text-on-surface-variant uppercase tracking-tighter">
-                    Subscriber since
-                  </p>
+                  <p className="text-[10px] font-label text-on-surface-variant uppercase tracking-tighter">Started</p>
                   <p className="text-sm font-semibold">
-                    {new Date(sub.subscribedSince).toLocaleDateString("en-US", {
+                    {new Date(sub.startDate).toLocaleDateString("en-US", {
                       month: "long",
                       day: "numeric",
                       year: "numeric",
@@ -288,22 +270,25 @@ export default function SubscriptionDetailPage() {
                 </div>
               </li>
               <li className="flex items-center gap-3">
-                <span className="material-symbols-outlined text-primary-container">
-                  {sub.source === "bank" ? "account_balance" : "edit"}
-                </span>
+                <span className="material-symbols-outlined text-primary-container">repeat</span>
                 <div>
-                  <p className="text-[10px] font-label text-on-surface-variant uppercase tracking-tighter">
-                    Source
-                  </p>
-                  <p className="text-sm font-semibold capitalize">
-                    {sub.source === "bank" ? "Auto-detected from bank" : "Manually added"}
-                  </p>
+                  <p className="text-[10px] font-label text-on-surface-variant uppercase tracking-tighter">Billing Cycle</p>
+                  <p className="text-sm font-semibold">{sub.billingCycle}</p>
                 </div>
               </li>
+              {sub.linkedAccount && (
+                <li className="flex items-center gap-3">
+                  <span className="material-symbols-outlined text-primary-container">credit_card</span>
+                  <div>
+                    <p className="text-[10px] font-label text-on-surface-variant uppercase tracking-tighter">Payment Method</p>
+                    <p className="text-sm font-semibold">{sub.linkedAccount}</p>
+                  </div>
+                </li>
+              )}
             </ul>
           </div>
 
-          {/* Auto-renew alert */}
+          {/* Upcoming renewal alert */}
           {sub.status === "active" && daysLeft <= 7 && (
             <div className="bg-tertiary-container/10 rounded-3xl p-6 shadow-sm border-l-4 border-tertiary">
               <div className="flex items-start gap-3">
@@ -313,8 +298,8 @@ export default function SubscriptionDetailPage() {
                     Upcoming Renewal
                   </h4>
                   <p className="text-xs text-on-surface-variant leading-relaxed">
-                    Your subscription will automatically renew on{" "}
-                    {new Date(sub.nextRenewal).toLocaleDateString("en-US", {
+                    Renews on{" "}
+                    {new Date(nextRenewal).toLocaleDateString("en-US", {
                       month: "short",
                       day: "numeric",
                     })}{" "}
@@ -337,60 +322,48 @@ export default function SubscriptionDetailPage() {
           <div className="flex items-center justify-between mb-6">
             <h3 className="text-xl font-bold font-headline text-on-surface">Payment History</h3>
           </div>
-          {sub.paymentHistory.length === 0 ? (
-            <p className="text-on-surface-variant text-sm">No payment history yet.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="text-left border-b border-surface-container">
-                    <th className="pb-4 text-[10px] font-label uppercase tracking-widest text-on-surface-variant">
-                      Date
-                    </th>
-                    <th className="pb-4 text-[10px] font-label uppercase tracking-widest text-on-surface-variant">
-                      Description
-                    </th>
-                    <th className="pb-4 text-[10px] font-label uppercase tracking-widest text-on-surface-variant">
-                      Status
-                    </th>
-                    <th className="pb-4 text-[10px] font-label uppercase tracking-widest text-on-surface-variant text-right">
-                      Amount
-                    </th>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="text-left border-b border-surface-container">
+                  <th className="pb-4 text-[10px] font-label uppercase tracking-widest text-on-surface-variant">Date</th>
+                  <th className="pb-4 text-[10px] font-label uppercase tracking-widest text-on-surface-variant">Description</th>
+                  <th className="pb-4 text-[10px] font-label uppercase tracking-widest text-on-surface-variant">Status</th>
+                  <th className="pb-4 text-[10px] font-label uppercase tracking-widest text-on-surface-variant text-right">Amount</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-surface-container/50">
+                {payments.slice(0, 6).map((payment) => (
+                  <tr key={payment.id}>
+                    <td className="py-5 font-medium text-sm">
+                      {new Date(payment.date).toLocaleDateString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                        year: "numeric",
+                      })}
+                    </td>
+                    <td className="py-5 text-sm">{payment.description}</td>
+                    <td className="py-5">
+                      <span
+                        className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase ${
+                          payment.status === "success"
+                            ? "bg-teal-50 text-teal-700"
+                            : payment.status === "pending"
+                            ? "bg-surface-container-high text-on-surface-variant"
+                            : "bg-error-container/30 text-error"
+                        }`}
+                      >
+                        {payment.status}
+                      </span>
+                    </td>
+                    <td className="py-5 text-right font-headline font-bold">
+                      ${payment.amount.toFixed(2)}
+                    </td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-surface-container/50">
-                  {sub.paymentHistory.map((payment) => (
-                    <tr key={payment.id}>
-                      <td className="py-5 font-medium text-sm">
-                        {new Date(payment.date).toLocaleDateString("en-US", {
-                          month: "short",
-                          day: "numeric",
-                          year: "numeric",
-                        })}
-                      </td>
-                      <td className="py-5 text-sm">{payment.description}</td>
-                      <td className="py-5">
-                        <span
-                          className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase ${
-                            payment.status === "success"
-                              ? "bg-teal-50 text-teal-700"
-                              : payment.status === "pending"
-                              ? "bg-surface-container-high text-on-surface-variant"
-                              : "bg-error-container/30 text-error"
-                          }`}
-                        >
-                          {payment.status}
-                        </span>
-                      </td>
-                      <td className="py-5 text-right font-headline font-bold">
-                        ${payment.amount.toFixed(2)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>

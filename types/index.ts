@@ -15,16 +15,16 @@ export interface Subscription {
   name: string;
   amount: number;
   billingCycle: BillingCycle;
-  nextRenewal: string; // ISO date string
+  /** When the subscription started — next renewal is computed from this */
+  startDate: string; // ISO date string
   category: SubscriptionCategory;
+  /** Payment method reference for future card integration, e.g. "Visa ••4242" */
   linkedAccount?: string;
   logo?: string;
   status: "active" | "cancelled" | "paused";
-  subscribedSince: string; // ISO date string
   paymentHistory: Payment[];
   autoRenew: boolean;
   notes?: string;
-  source: "manual" | "bank"; // manually added or auto-detected from bank
 }
 
 export interface Payment {
@@ -33,15 +33,6 @@ export interface Payment {
   amount: number;
   status: "success" | "failed" | "pending";
   description: string;
-}
-
-export interface BankAccount {
-  id: string;
-  institutionName: string;
-  accountName: string;
-  accountType: string;
-  mask: string; // last 4 digits
-  accessToken?: string; // Plaid access token
 }
 
 export interface AlertPreferences {
@@ -55,8 +46,6 @@ export interface AlertPreferences {
 
 export interface UserProfile {
   id: string;
-  phone: string;
   email?: string;
-  bankAccounts: BankAccount[];
   alertPreferences: AlertPreferences;
 }

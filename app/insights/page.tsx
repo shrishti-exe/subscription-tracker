@@ -48,7 +48,7 @@ export default function InsightsPage() {
 
   const mostExpensive = [...active].sort((a, b) => b.amount - a.amount)[0];
   const mostRecent = [...active].sort(
-    (a, b) => new Date(b.subscribedSince).getTime() - new Date(a.subscribedSince).getTime()
+    (a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime()
   )[0];
 
   // Monthly breakdown simulation (last 6 months)

@@ -45,26 +45,33 @@ export default function SideNav() {
       <div className="mt-auto pt-6 space-y-2">
         <Link
           href="/subscriptions/add"
-          className="w-full bg-gradient-to-br from-primary to-primary-container text-white py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 mb-2 active:scale-95 transition-transform shadow-lg shadow-primary/20"
+          className="w-full bg-gradient-to-br from-primary to-primary-container text-white py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 mb-6 active:scale-95 transition-transform shadow-lg shadow-primary/20"
         >
           <span className="material-symbols-outlined text-sm">add</span>
           Add New
         </Link>
         <Link
-          href="/connect"
-          className="w-full border border-primary/30 text-primary py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 mb-4 active:scale-95 transition-all hover:bg-primary/5"
+          href="/settings"
+          className={`flex items-center gap-3 px-4 py-2 text-sm transition-all duration-300 ${
+            isActive("/settings")
+              ? "text-teal-700 font-bold border-r-4 border-teal-600 bg-white rounded-l-xl"
+              : "text-slate-500 hover:text-teal-600 hover:bg-white rounded-xl"
+          }`}
         >
-          <span className="material-symbols-outlined text-sm">account_balance</span>
-          Connect Bank
-        </Link>
-        <a className="flex items-center gap-3 px-4 py-2 text-slate-500 text-sm hover:text-teal-600 transition-colors" href="#">
           <span className="material-symbols-outlined">settings</span>
           Settings
-        </a>
-        <a className="flex items-center gap-3 px-4 py-2 text-slate-500 text-sm hover:text-teal-600 transition-colors" href="#">
-          <span className="material-symbols-outlined">help_outline</span>
-          Support
-        </a>
+        </Link>
+        <Link
+          href="/profile"
+          className={`flex items-center gap-3 px-4 py-2 text-sm transition-all duration-300 ${
+            isActive("/profile")
+              ? "text-teal-700 font-bold border-r-4 border-teal-600 bg-white rounded-l-xl"
+              : "text-slate-500 hover:text-teal-600 hover:bg-white rounded-xl"
+          }`}
+        >
+          <span className="material-symbols-outlined">account_circle</span>
+          Profile
+        </Link>
       </div>
     </aside>
   );

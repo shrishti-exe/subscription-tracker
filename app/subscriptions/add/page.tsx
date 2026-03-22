@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useStore } from "@/lib/store";
 import { BillingCycle, SubscriptionCategory } from "@/types";
+import { computeNextRenewal } from "@/lib/mockData";
 
 const CATEGORIES: { label: SubscriptionCategory; icon: string }[] = [
   { label: "Entertainment", icon: "movie" },
@@ -23,28 +24,30 @@ export default function AddSubscriptionPage() {
   const [name, setName] = useState("");
   const [amount, setAmount] = useState("");
   const [billingCycle, setBillingCycle] = useState<BillingCycle>("Monthly");
-  const [nextRenewal, setNextRenewal] = useState("");
+  const [startDate, setStartDate] = useState("");
   const [linkedAccount, setLinkedAccount] = useState("");
   const [category, setCategory] = useState<SubscriptionCategory>("Entertainment");
   const [error, setError] = useState("");
+
+  // Computed preview of next renewal
+  const nextRenewalPreview =
+    startDate ? computeNextRenewal(startDate, billingCycle) : null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return setError("Subscription name is required.");
     if (!amount || parseFloat(amount) <= 0) return setError("Please enter a valid amount.");
-    if (!nextRenewal) return setError("Please select a renewal date.");
+    if (!startDate) return setError("Please enter the subscription start date.");
 
     addSubscription({
       name: name.trim(),
       amount: parseFloat(amount),
       billingCycle,
-      nextRenewal,
+      startDate,
       category,
       linkedAccount: linkedAccount.trim() || undefined,
       status: "active",
-      subscribedSince: new Date().toISOString().split("T")[0],
       autoRenew: true,
-      source: "manual",
     });
 
     router.push("/subscriptions");
@@ -57,35 +60,35 @@ export default function AddSubscriptionPage() {
         <div className="lg:col-span-5 space-y-6 lg:sticky lg:top-24">
           <div className="space-y-2">
             <span className="text-primary font-bold tracking-widest uppercase text-xs">
-              New Intel
+              New Entry
             </span>
             <h2 className="text-4xl lg:text-5xl font-extrabold text-on-background font-headline leading-tight tracking-tight">
               Add a <br />Subscription.
             </h2>
           </div>
           <p className="text-on-surface-variant text-lg leading-relaxed max-w-sm">
-            Keep your digital portfolio pristine. Log your recurring costs to unlock
-            predictive intelligence and spend optimization.
+            Log your recurring costs and we&apos;ll automatically track every renewal
+            — forever, based on your start date.
           </p>
           <div className="flex flex-col gap-4 pt-4">
-            <div className="flex items-center gap-4 p-4 bg-surface-container-low rounded-2xl">
-              <div className="w-12 h-12 rounded-xl bg-primary-container flex items-center justify-center text-on-primary-container">
-                <span className="material-symbols-outlined">security</span>
-              </div>
-              <div>
-                <p className="font-semibold text-sm">Bank-Level Privacy</p>
-                <p className="text-xs text-on-surface-variant">Your financial data stays yours.</p>
-              </div>
-            </div>
             <div className="flex items-center gap-4 p-4 bg-surface-container-low rounded-2xl">
               <div className="w-12 h-12 rounded-xl bg-primary-container flex items-center justify-center text-on-primary-container">
                 <span className="material-symbols-outlined">auto_awesome</span>
               </div>
               <div>
-                <p className="font-semibold text-sm">Auto-Detection Available</p>
+                <p className="font-semibold text-sm">Auto-tracked Renewals</p>
                 <p className="text-xs text-on-surface-variant">
-                  Link your bank to find subscriptions automatically.
+                  Enter a start date once — we handle the rest.
                 </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-4 p-4 bg-surface-container-low rounded-2xl">
+              <div className="w-12 h-12 rounded-xl bg-primary-container flex items-center justify-center text-on-primary-container">
+                <span className="material-symbols-outlined">lock</span>
+              </div>
+              <div>
+                <p className="font-semibold text-sm">Stays Local</p>
+                <p className="text-xs text-on-surface-variant">All data saved on your device.</p>
               </div>
             </div>
           </div>
@@ -120,7 +123,7 @@ export default function AddSubscriptionPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <label className="block text-sm font-bold text-on-surface-variant px-1">
-                    Monthly/Yearly Amount
+                    Amount
                   </label>
                   <div className="relative">
                     <span className="absolute left-6 top-1/2 -translate-y-1/2 text-on-surface-variant font-bold text-lg">
@@ -160,29 +163,41 @@ export default function AddSubscriptionPage() {
                 </div>
               </div>
 
-              {/* Renewal Date + Linked Account */}
+              {/* Start Date + Payment Method */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <label className="block text-sm font-bold text-on-surface-variant px-1">
-                    Next Renewal Date
+                    Start Date
                   </label>
                   <div className="relative">
                     <input
                       className="w-full h-14 px-6 bg-surface-container-low border-none rounded-xl text-lg font-medium focus:ring-2 focus:ring-primary focus:bg-surface-container-lowest transition-all outline-none"
                       type="date"
-                      value={nextRenewal}
-                      onChange={(e) => setNextRenewal(e.target.value)}
+                      value={startDate}
+                      onChange={(e) => setStartDate(e.target.value)}
                     />
                   </div>
+                  {/* Live renewal preview */}
+                  {nextRenewalPreview && (
+                    <p className="text-xs text-primary font-semibold px-1 flex items-center gap-1">
+                      <span className="material-symbols-outlined text-sm">event</span>
+                      Next renewal:{" "}
+                      {new Date(nextRenewalPreview).toLocaleDateString("en-US", {
+                        month: "long",
+                        day: "numeric",
+                        year: "numeric",
+                      })}
+                    </p>
+                  )}
                 </div>
 
                 <div className="space-y-2">
                   <label className="block text-sm font-bold text-on-surface-variant px-1">
-                    Linked Account/Ref
+                    Payment Method
                   </label>
                   <input
                     className="w-full h-14 px-6 bg-surface-container-low border-none rounded-xl text-lg font-medium focus:ring-2 focus:ring-primary focus:bg-surface-container-lowest transition-all placeholder:text-outline-variant outline-none"
-                    placeholder="e.g. Visa 4242 or Phone"
+                    placeholder="e.g. Visa ••4242, Amex ••9001"
                     type="text"
                     value={linkedAccount}
                     onChange={(e) => setLinkedAccount(e.target.value)}
@@ -236,7 +251,7 @@ export default function AddSubscriptionPage() {
 
           <div className="mt-8 flex items-center justify-center gap-2 text-on-surface-variant/60 text-sm">
             <span className="material-symbols-outlined text-base">lightbulb</span>
-            <span>Pro-tip: Most users save $45/mo by finding unused trials.</span>
+            <span>Pro-tip: Most teams save $45/mo by auditing unused subscriptions.</span>
           </div>
         </div>
       </div>
