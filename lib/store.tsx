@@ -1,16 +1,24 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
 import { Subscription, AlertPreferences } from "@/types";
 import { MOCK_SUBSCRIPTIONS, MOCK_USER } from "./mockData";
+
+const SUPABASE_CONFIGURED =
+  typeof window !== "undefined"
+    ? !!process.env.NEXT_PUBLIC_SUPABASE_URL
+    : false;
 
 interface StoreContextType {
   subscriptions: Subscription[];
   alertPreferences: AlertPreferences;
-  addSubscription: (s: Omit<Subscription, "id" | "paymentHistory">) => void;
-  updateSubscription: (id: string, updates: Partial<Subscription>) => void;
-  cancelSubscription: (id: string) => void;
+  teamId: string | null;
+  addSubscription: (s: Omit<Subscription, "id" | "paymentHistory">) => Promise<void>;
+  updateSubscription: (id: string, updates: Partial<Subscription>) => Promise<void>;
+  cancelSubscription: (id: string) => Promise<void>;
+  deleteSubscription: (id: string) => Promise<void>;
   updateAlertPreferences: (prefs: Partial<AlertPreferences>) => void;
+  refreshSubscriptions: (teamId?: string) => Promise<void>;
 }
 
 const StoreContext = createContext<StoreContextType | null>(null);
@@ -18,27 +26,38 @@ const StoreContext = createContext<StoreContextType | null>(null);
 const STORAGE_KEY = "curator_subscriptions";
 const PREFS_KEY = "curator_alert_prefs";
 
-export function StoreProvider({ children }: { children: React.ReactNode }) {
+export function StoreProvider({
+  children,
+  initialTeamId,
+}: {
+  children: React.ReactNode;
+  initialTeamId?: string | null;
+}) {
   const [subscriptions, setSubscriptions] = useState<Subscription[]>(MOCK_SUBSCRIPTIONS);
   const [alertPreferences, setAlertPreferences] = useState<AlertPreferences>(
     MOCK_USER.alertPreferences
   );
+  const [teamId, setTeamId] = useState<string | null>(initialTeamId ?? null);
 
-  // Load from localStorage on mount
+  // Load from localStorage on mount (fallback / demo mode)
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) setSubscriptions(JSON.parse(stored));
-      const prefs = localStorage.getItem(PREFS_KEY);
-      if (prefs) setAlertPreferences(JSON.parse(prefs));
-    } catch {}
+    if (!SUPABASE_CONFIGURED) {
+      try {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        if (stored) setSubscriptions(JSON.parse(stored));
+        const prefs = localStorage.getItem(PREFS_KEY);
+        if (prefs) setAlertPreferences(JSON.parse(prefs));
+      } catch {}
+    }
   }, []);
 
-  // Persist to localStorage on change
+  // Persist to localStorage (demo mode)
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(subscriptions));
-    } catch {}
+    if (!SUPABASE_CONFIGURED) {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(subscriptions));
+      } catch {}
+    }
   }, [subscriptions]);
 
   useEffect(() => {
@@ -47,26 +66,123 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     } catch {}
   }, [alertPreferences]);
 
-  const addSubscription = (s: Omit<Subscription, "id" | "paymentHistory">) => {
-    const newSub: Subscription = {
-      ...s,
-      id: `sub_${Date.now()}`,
-      paymentHistory: [],
-    };
+  const refreshSubscriptions = useCallback(async (tid?: string) => {
+    const activeTeamId = tid ?? teamId;
+    if (!SUPABASE_CONFIGURED || !activeTeamId) return;
+
+    try {
+      const { createClient } = await import("@/lib/supabase/client");
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from("subscriptions")
+        .select("*")
+        .eq("team_id", activeTeamId)
+        .order("created_at", { ascending: false });
+
+      if (!error && data) {
+        // Map snake_case DB fields to camelCase
+        const mapped: Subscription[] = data.map((row) => ({
+          id: row.id,
+          name: row.name,
+          amount: row.amount,
+          billingCycle: row.billing_cycle,
+          startDate: row.start_date,
+          category: row.category,
+          linkedAccount: row.linked_account,
+          status: row.status,
+          autoRenew: row.auto_renew,
+          notes: row.notes,
+          paymentHistory: [],
+        }));
+        setSubscriptions(mapped);
+      }
+    } catch {}
+  }, [teamId]);
+
+  const addSubscription = useCallback(async (s: Omit<Subscription, "id" | "paymentHistory">) => {
+    if (SUPABASE_CONFIGURED && teamId) {
+      try {
+        const { createClient } = await import("@/lib/supabase/client");
+        const supabase = createClient();
+        const { data, error } = await supabase
+          .from("subscriptions")
+          .insert({
+            team_id: teamId,
+            name: s.name,
+            amount: s.amount,
+            billing_cycle: s.billingCycle,
+            start_date: s.startDate,
+            category: s.category,
+            linked_account: s.linkedAccount,
+            status: s.status,
+            auto_renew: s.autoRenew,
+            notes: s.notes,
+          })
+          .select()
+          .single();
+
+        if (!error && data) {
+          await refreshSubscriptions();
+          return;
+        }
+      } catch {}
+    }
+
+    // localStorage fallback
+    const newSub: Subscription = { ...s, id: `sub_${Date.now()}`, paymentHistory: [] };
     setSubscriptions((prev) => [newSub, ...prev]);
-  };
+  }, [teamId, refreshSubscriptions]);
 
-  const updateSubscription = (id: string, updates: Partial<Subscription>) => {
-    setSubscriptions((prev) =>
-      prev.map((s) => (s.id === id ? { ...s, ...updates } : s))
-    );
-  };
+  const updateSubscription = useCallback(async (id: string, updates: Partial<Subscription>) => {
+    // Optimistic local update
+    setSubscriptions((prev) => prev.map((s) => (s.id === id ? { ...s, ...updates } : s)));
 
-  const cancelSubscription = (id: string) => {
-    setSubscriptions((prev) =>
-      prev.map((s) => (s.id === id ? { ...s, status: "cancelled" } : s))
-    );
-  };
+    if (SUPABASE_CONFIGURED && teamId) {
+      try {
+        const { createClient } = await import("@/lib/supabase/client");
+        const supabase = createClient();
+        await supabase
+          .from("subscriptions")
+          .update({
+            ...(updates.name && { name: updates.name }),
+            ...(updates.amount !== undefined && { amount: updates.amount }),
+            ...(updates.billingCycle && { billing_cycle: updates.billingCycle }),
+            ...(updates.startDate && { start_date: updates.startDate }),
+            ...(updates.category && { category: updates.category }),
+            ...(updates.linkedAccount !== undefined && { linked_account: updates.linkedAccount }),
+            ...(updates.status && { status: updates.status }),
+            ...(updates.autoRenew !== undefined && { auto_renew: updates.autoRenew }),
+          })
+          .eq("id", id);
+      } catch {}
+    }
+  }, [teamId]);
+
+  const cancelSubscription = useCallback(async (id: string) => {
+    await updateSubscription(id, { status: "cancelled" });
+  }, [updateSubscription]);
+
+  const deleteSubscription = useCallback(async (id: string) => {
+    // Optimistic local delete
+    setSubscriptions((prev) => prev.filter((s) => s.id !== id));
+
+    if (SUPABASE_CONFIGURED && teamId) {
+      try {
+        const { createClient } = await import("@/lib/supabase/client");
+        const supabase = createClient();
+        await supabase.from("subscriptions").delete().eq("id", id);
+      } catch {}
+    } else {
+      // localStorage
+      try {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        if (stored) {
+          const subs: Subscription[] = JSON.parse(stored);
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(subs.filter((s) => s.id !== id)));
+        }
+      } catch {}
+    }
+  }, [teamId]);
 
   const updateAlertPreferences = (prefs: Partial<AlertPreferences>) => {
     setAlertPreferences((prev) => ({ ...prev, ...prefs }));
@@ -77,10 +193,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       value={{
         subscriptions,
         alertPreferences,
+        teamId,
         addSubscription,
         updateSubscription,
         cancelSubscription,
+        deleteSubscription,
         updateAlertPreferences,
+        refreshSubscriptions,
       }}
     >
       {children}

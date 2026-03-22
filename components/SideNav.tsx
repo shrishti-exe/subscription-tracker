@@ -50,14 +50,28 @@ export default function SideNav() {
           <span className="material-symbols-outlined text-sm">add</span>
           Add New
         </Link>
-        <a className="flex items-center gap-3 px-4 py-2 text-slate-500 text-sm hover:text-teal-600 transition-colors" href="#">
+        <Link
+          href="/settings"
+          className={`flex items-center gap-3 px-4 py-2 text-sm transition-all duration-300 ${
+            isActive("/settings")
+              ? "text-teal-700 font-bold border-r-4 border-teal-600 bg-white rounded-l-xl"
+              : "text-slate-500 hover:text-teal-600 hover:bg-white rounded-xl"
+          }`}
+        >
           <span className="material-symbols-outlined">settings</span>
           Settings
-        </a>
-        <a className="flex items-center gap-3 px-4 py-2 text-slate-500 text-sm hover:text-teal-600 transition-colors" href="#">
-          <span className="material-symbols-outlined">help_outline</span>
-          Support
-        </a>
+        </Link>
+        <Link
+          href="/profile"
+          className={`flex items-center gap-3 px-4 py-2 text-sm transition-all duration-300 ${
+            isActive("/profile")
+              ? "text-teal-700 font-bold border-r-4 border-teal-600 bg-white rounded-l-xl"
+              : "text-slate-500 hover:text-teal-600 hover:bg-white rounded-xl"
+          }`}
+        >
+          <span className="material-symbols-outlined">account_circle</span>
+          Profile
+        </Link>
       </div>
     </aside>
   );

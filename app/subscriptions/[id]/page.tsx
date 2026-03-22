@@ -53,7 +53,7 @@ function SpendingChart({ payments }: { payments: { date: string; amount: number;
 export default function SubscriptionDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const { subscriptions, cancelSubscription, updateSubscription } = useStore();
+  const { subscriptions, cancelSubscription, updateSubscription, deleteSubscription } = useStore();
 
   const sub = subscriptions.find((s) => s.id === params.id);
 
@@ -97,6 +97,13 @@ export default function SubscriptionDetailPage() {
     }
   };
 
+  const handleDelete = () => {
+    if (confirm(`Permanently delete ${sub.name}? This cannot be undone.`)) {
+      deleteSubscription(sub.id);
+      router.push("/subscriptions");
+    }
+  };
+
   const handleToggleAutoRenew = () => {
     updateSubscription(sub.id, { autoRenew: !sub.autoRenew });
   };
@@ -123,9 +130,16 @@ export default function SubscriptionDetailPage() {
               className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-error bg-error-container/30 hover:bg-error-container/50 transition-all active:scale-95 font-medium text-sm"
             >
               <span className="material-symbols-outlined text-[20px]">cancel</span>
-              Cancel Subscription
+              Cancel
             </button>
           )}
+          <button
+            onClick={handleDelete}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-error bg-error-container/30 hover:bg-error-container/60 transition-all active:scale-95 font-medium text-sm"
+          >
+            <span className="material-symbols-outlined text-[20px]">delete</span>
+            Delete
+          </button>
         </div>
       </div>
 
