@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useStore } from "@/lib/store";
 import { SubscriptionCategory } from "@/types";
-import { getDaysUntilRenewal } from "@/lib/mockData";
+import { getDaysUntilRenewal, computeNextRenewal } from "@/lib/mockData";
 
 const CATEGORIES: SubscriptionCategory[] = [
   "Entertainment",
@@ -29,7 +29,7 @@ const CATEGORY_ICONS: Record<string, string> = {
 };
 
 export default function SubscriptionsPage() {
-  const { subscriptions, cancelSubscription } = useStore();
+  const { subscriptions } = useStore();
   const [filter, setFilter] = useState<"all" | "active" | "cancelled">("all");
   const [category, setCategory] = useState<string>("all");
   const [sort, setSort] = useState<"name" | "amount" | "renewal">("renewal");
@@ -43,7 +43,9 @@ export default function SubscriptionsPage() {
     .sort((a, b) => {
       if (sort === "name") return a.name.localeCompare(b.name);
       if (sort === "amount") return b.amount - a.amount;
-      return new Date(a.nextRenewal).getTime() - new Date(b.nextRenewal).getTime();
+      const aRenewal = computeNextRenewal(a.startDate, a.billingCycle);
+      const bRenewal = computeNextRenewal(b.startDate, b.billingCycle);
+      return new Date(aRenewal).getTime() - new Date(bRenewal).getTime();
     });
 
   const totalActive = subscriptions.filter((s) => s.status === "active").length;
@@ -72,7 +74,6 @@ export default function SubscriptionsPage() {
 
       {/* Filters */}
       <div className="flex flex-wrap gap-4 mb-8">
-        {/* Status Filter */}
         <div className="flex bg-surface-container-low p-1 rounded-xl gap-1">
           {(["all", "active", "cancelled"] as const).map((f) => (
             <button
@@ -89,7 +90,6 @@ export default function SubscriptionsPage() {
           ))}
         </div>
 
-        {/* Sort */}
         <div className="flex items-center gap-2">
           <span className="text-sm text-on-surface-variant">Sort:</span>
           <select
@@ -132,7 +132,7 @@ export default function SubscriptionsPage() {
         ))}
       </div>
 
-      {/* Subscription Grid */}
+      {/* Grid */}
       {filtered.length === 0 ? (
         <div className="text-center py-20">
           <span className="material-symbols-outlined text-6xl text-on-surface-variant/30">
@@ -146,7 +146,8 @@ export default function SubscriptionsPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {filtered.map((sub) => {
-            const daysLeft = getDaysUntilRenewal(sub.nextRenewal);
+            const daysLeft = getDaysUntilRenewal(sub.startDate, sub.billingCycle);
+            const nextRenewal = computeNextRenewal(sub.startDate, sub.billingCycle);
             return (
               <Link
                 key={sub.id}
@@ -191,7 +192,7 @@ export default function SubscriptionsPage() {
                   <div className="text-right">
                     <p className="text-xs text-on-surface-variant">Next renewal</p>
                     <p className="text-sm font-bold">
-                      {new Date(sub.nextRenewal).toLocaleDateString("en-US", {
+                      {new Date(nextRenewal).toLocaleDateString("en-US", {
                         month: "short",
                         day: "numeric",
                         year: "numeric",
@@ -204,11 +205,6 @@ export default function SubscriptionsPage() {
                   <div className="flex items-center gap-2 text-xs text-on-surface-variant pt-2 border-t border-outline-variant/20">
                     <span className="material-symbols-outlined text-sm">credit_card</span>
                     {sub.linkedAccount}
-                    {sub.source === "bank" && (
-                      <span className="ml-auto bg-primary/10 text-primary px-2 py-0.5 rounded-full text-[10px] font-bold">
-                        Auto-detected
-                      </span>
-                    )}
                   </div>
                 )}
               </Link>
