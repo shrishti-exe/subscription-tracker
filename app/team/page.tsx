@@ -37,20 +37,20 @@ export default function TeamPage() {
       const tname = (membership.teams as any)?.name;
       if (tname) setTeamName(tname);
 
-      // Get all members + their emails from user_preferences
+      // Get all members + their emails via security definer function
       const { data: memberRows } = await supabase
-        .from("team_members")
-        .select("id, role, user_id, user_preferences(email)")
-        .eq("team_id", teamId);
+        .rpc("get_team_members", { p_team_id: teamId });
 
       if (memberRows) {
         const list: Member[] = memberRows.map((row: any) => {
-          const email: string = row.user_preferences?.email ?? "Unknown";
-          const name = email.split("@")[0]
-            .split(".")
-            .map((w: string) => w.charAt(0).toUpperCase() + w.slice(1))
-            .join(" ");
-          return { id: row.id, email, name, role: row.role };
+          const email: string = row.email || "Unknown";
+          const name = email.includes("@")
+            ? email.split("@")[0]
+                .split(".")
+                .map((w: string) => w.charAt(0).toUpperCase() + w.slice(1))
+                .join(" ")
+            : "Unknown";
+          return { id: row.member_id, email, name, role: row.role };
         });
         // Sort: owners first, then alphabetically
         list.sort((a, b) => {
