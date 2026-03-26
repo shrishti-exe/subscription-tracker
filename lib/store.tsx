@@ -33,11 +33,20 @@ export function StoreProvider({
   children: React.ReactNode;
   initialTeamId?: string | null;
 }) {
-  const [subscriptions, setSubscriptions] = useState<Subscription[]>(MOCK_SUBSCRIPTIONS);
+  const [subscriptions, setSubscriptions] = useState<Subscription[]>(
+    SUPABASE_CONFIGURED ? [] : MOCK_SUBSCRIPTIONS
+  );
   const [alertPreferences, setAlertPreferences] = useState<AlertPreferences>(
     MOCK_USER.alertPreferences
   );
   const [teamId, setTeamId] = useState<string | null>(initialTeamId ?? null);
+
+  // Fetch from Supabase on mount when authenticated
+  useEffect(() => {
+    if (SUPABASE_CONFIGURED && teamId) {
+      refreshSubscriptions(teamId);
+    }
+  }, [teamId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load from localStorage on mount (fallback / demo mode)
   useEffect(() => {

@@ -61,7 +61,10 @@ function LoginForm() {
             <div className="flex items-center gap-3 p-4 bg-error-container/30 text-error rounded-xl mb-6">
               <span className="material-symbols-outlined text-sm">error</span>
               <p className="text-sm">
-                {error || "Authentication failed. Please try again."}
+                {error ||
+                  (authError === "unauthorized_domain"
+                    ? "Only @dognosis.tech accounts are allowed."
+                    : "Authentication failed. Please try again.")}
               </p>
             </div>
           )}

@@ -10,11 +10,32 @@ export const metadata: Metadata = {
   description: "Track and manage all your subscriptions in one place",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  let initialTeamId: string | null = null;
+
+  if (process.env.NEXT_PUBLIC_SUPABASE_URL) {
+    try {
+      const { createClient } = await import("@/lib/supabase/server");
+      const supabase = await createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (user) {
+        const { data: membership } = await supabase
+          .from("team_members")
+          .select("team_id")
+          .eq("user_id", user.id)
+          .single();
+        initialTeamId = membership?.team_id ?? null;
+      }
+    } catch {}
+  }
+
   return (
     <html lang="en" className="light">
       <head>
@@ -28,7 +49,7 @@ export default function RootLayout({
         />
       </head>
       <body className="bg-surface text-on-surface font-body min-h-screen">
-        <StoreProvider>
+        <StoreProvider initialTeamId={initialTeamId}>
           <SideNav />
           <div className="md:ml-64 flex flex-col min-h-screen">
             <TopBar />

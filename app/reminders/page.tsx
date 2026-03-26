@@ -1,11 +1,32 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { useStore } from "@/lib/store";
 import { getUpcomingRenewals, getDaysUntilRenewal, computeNextRenewal } from "@/lib/mockData";
 
 export default function RemindersPage() {
   const { subscriptions, alertPreferences, updateAlertPreferences } = useStore();
+  const [sending, setSending] = useState(false);
+  const [sendResult, setSendResult] = useState<{ ok: boolean; msg: string } | null>(null);
+
+  const handleSendReminder = async () => {
+    setSending(true);
+    setSendResult(null);
+    try {
+      const res = await fetch("/api/send-reminders", { method: "POST" });
+      const json = await res.json();
+      if (res.ok) {
+        setSendResult({ ok: true, msg: json.renewals > 0 ? `Email sent — ${json.renewals} upcoming renewal${json.renewals !== 1 ? "s" : ""}` : "No renewals in the next 3 days." });
+      } else {
+        setSendResult({ ok: false, msg: json.error || "Failed to send." });
+      }
+    } catch {
+      setSendResult({ ok: false, msg: "Network error." });
+    } finally {
+      setSending(false);
+    }
+  };
 
   const active = subscriptions.filter((s) => s.status === "active");
   const upcoming7 = getUpcomingRenewals(active, 7);
@@ -173,9 +194,23 @@ export default function RemindersPage() {
                 </p>
               </div>
 
-              <button className="w-full bg-primary text-on-primary font-bold py-3 rounded-xl hover:opacity-90 transition-all active:scale-95">
-                Update Alert Logic
+              <button
+                onClick={handleSendReminder}
+                disabled={sending}
+                className="w-full bg-primary text-on-primary font-bold py-3 rounded-xl hover:opacity-90 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {sending ? (
+                  <span className="material-symbols-outlined animate-spin text-sm">progress_activity</span>
+                ) : (
+                  <span className="material-symbols-outlined text-sm">send</span>
+                )}
+                {sending ? "Sending..." : "Send Reminder Email Now"}
               </button>
+              {sendResult && (
+                <p className={`text-xs text-center mt-2 font-medium ${sendResult.ok ? "text-teal-600" : "text-error"}`}>
+                  {sendResult.ok ? "✓ " : "✗ "}{sendResult.msg}
+                </p>
+              )}
             </div>
           </div>
 
