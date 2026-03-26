@@ -5,10 +5,8 @@ import { Subscription, AlertPreferences } from "@/types";
 import { MOCK_SUBSCRIPTIONS, MOCK_USER } from "./mockData";
 import { Currency } from "./currency";
 
-const SUPABASE_CONFIGURED =
-  typeof window !== "undefined"
-    ? !!process.env.NEXT_PUBLIC_SUPABASE_URL
-    : false;
+// NEXT_PUBLIC_ vars are inlined at build time — safe to use without window check
+const SUPABASE_CONFIGURED = !!process.env.NEXT_PUBLIC_SUPABASE_URL;
 
 interface StoreContextType {
   subscriptions: Subscription[];
@@ -37,9 +35,9 @@ export function StoreProvider({
   children: React.ReactNode;
   initialTeamId?: string | null;
 }) {
-  const [subscriptions, setSubscriptions] = useState<Subscription[]>(
-    SUPABASE_CONFIGURED ? [] : MOCK_SUBSCRIPTIONS
-  );
+  // Always start with [] to avoid SSR/client hydration mismatch.
+  // Demo mode (no Supabase) loads from localStorage in the effect below.
+  const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [alertPreferences, setAlertPreferences] = useState<AlertPreferences>(
     MOCK_USER.alertPreferences
   );
@@ -91,7 +89,7 @@ export function StoreProvider({
     if (!SUPABASE_CONFIGURED) {
       try {
         const stored = localStorage.getItem(STORAGE_KEY);
-        if (stored) setSubscriptions(JSON.parse(stored));
+        setSubscriptions(stored ? JSON.parse(stored) : MOCK_SUBSCRIPTIONS);
         const prefs = localStorage.getItem(PREFS_KEY);
         if (prefs) setAlertPreferences(JSON.parse(prefs));
       } catch {}
