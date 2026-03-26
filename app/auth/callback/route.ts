@@ -26,6 +26,12 @@ export async function GET(request: Request) {
       // Auto-provision user into the shared Dognosis team
       await supabase.rpc("join_dognosis_team");
 
+      // Save email to user_preferences so the cron job can reach them
+      await supabase.from("user_preferences").upsert(
+        { user_id: user.id, email: user.email, updated_at: new Date().toISOString() },
+        { onConflict: "user_id", ignoreDuplicates: false }
+      );
+
       return NextResponse.redirect(`${origin}${next}`);
     }
   }

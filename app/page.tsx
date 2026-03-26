@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useStore } from "@/lib/store";
+import { formatCurrency } from "@/lib/currency";
 import {
   getTotalMonthly,
   getUpcomingRenewals,
@@ -10,7 +11,7 @@ import {
   computeNextRenewal,
 } from "@/lib/mockData";
 
-function SubIcon({ name, category }: { name: string; category: string }) {
+function SubIcon({ category }: { category: string }) {
   const CATEGORY_ICONS: Record<string, string> = {
     Entertainment: "movie",
     Productivity: "work",
@@ -31,7 +32,7 @@ function SubIcon({ name, category }: { name: string; category: string }) {
 }
 
 export default function DashboardPage() {
-  const { subscriptions } = useStore();
+  const { subscriptions, currency } = useStore();
 
   const active = subscriptions.filter((s) => s.status === "active");
   const totalMonthly = getTotalMonthly(active);
@@ -60,8 +61,7 @@ export default function DashboardPage() {
     .sort(([, a], [, b]) => b - a)
     .slice(0, 3);
 
-  const dollars = Math.floor(totalMonthly);
-  const cents = String(Math.round((totalMonthly % 1) * 100)).padStart(2, "0");
+  const formattedTotal = formatCurrency(totalMonthly, currency);
 
   return (
     <div className="p-6 md:p-10 space-y-10 max-w-7xl mx-auto w-full">
@@ -73,8 +73,7 @@ export default function DashboardPage() {
           </p>
           <div className="flex items-baseline gap-4">
             <h2 className="text-6xl md:text-7xl font-extrabold font-headline text-on-surface tracking-tighter">
-              ${dollars}
-              <span className="text-primary font-bold">.{cents}</span>
+              {formattedTotal}
             </h2>
             <span className="bg-primary-container/10 text-primary-container px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1">
               <span className="material-symbols-outlined text-sm">trending_up</span>
@@ -97,7 +96,7 @@ export default function DashboardPage() {
                 Next Renewal
               </p>
               <div className="flex items-center gap-4 mb-4">
-                <SubIcon name={nextRenewalSub.name} category={nextRenewalSub.category} />
+                <SubIcon category={nextRenewalSub.category} />
                 <div>
                   <p className="font-bold text-lg">{nextRenewalSub.name}</p>
                   <p className="text-sm text-tertiary font-medium">
@@ -138,7 +137,7 @@ export default function DashboardPage() {
                       className="bg-surface-container-lowest p-5 rounded-2xl flex items-center justify-between transition-all hover:scale-[1.02] hover:shadow-xl hover:shadow-slate-200/50"
                     >
                       <div className="flex items-center gap-4">
-                        <SubIcon name={sub.name} category={sub.category} />
+                        <SubIcon category={sub.category} />
                         <div>
                           <p className="font-bold">{sub.name}</p>
                           <p className="text-xs text-on-surface-variant opacity-60">
@@ -151,7 +150,7 @@ export default function DashboardPage() {
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className="font-bold text-primary">${sub.amount.toFixed(2)}</p>
+                        <p className="font-bold text-primary">{formatCurrency(sub.amount, currency)}</p>
                         <p className="text-[10px] text-on-surface-variant uppercase tracking-wider">
                           {sub.billingCycle}
                         </p>
@@ -184,7 +183,7 @@ export default function DashboardPage() {
                       }`}
                     >
                       <div className="flex items-center gap-4">
-                        <SubIcon name={sub.name} category={sub.category} />
+                        <SubIcon category={sub.category} />
                         <div>
                           <p className="font-bold">{sub.name}</p>
                           {daysLeft <= 1 ? (
@@ -203,7 +202,7 @@ export default function DashboardPage() {
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className="font-bold text-primary">${sub.amount.toFixed(2)}</p>
+                        <p className="font-bold text-primary">{formatCurrency(sub.amount, currency)}</p>
                         <p className="text-[10px] text-on-surface-variant uppercase tracking-wider">
                           {sub.billingCycle}
                         </p>
@@ -254,7 +253,7 @@ export default function DashboardPage() {
                             month: "short",
                             day: "numeric",
                           })}{" "}
-                          • ${sub.amount.toFixed(2)}
+                          · {formatCurrency(sub.amount, currency)}
                         </p>
                       </div>
                       <span className="material-symbols-outlined text-slate-300 group-hover:text-primary transition-colors">

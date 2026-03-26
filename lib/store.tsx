@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
 import { Subscription, AlertPreferences } from "@/types";
 import { MOCK_SUBSCRIPTIONS, MOCK_USER } from "./mockData";
+import { Currency } from "./currency";
 
 const SUPABASE_CONFIGURED =
   typeof window !== "undefined"
@@ -13,6 +14,8 @@ interface StoreContextType {
   subscriptions: Subscription[];
   alertPreferences: AlertPreferences;
   teamId: string | null;
+  currency: Currency;
+  setCurrency: (c: Currency) => void;
   addSubscription: (s: Omit<Subscription, "id" | "paymentHistory">) => Promise<void>;
   updateSubscription: (id: string, updates: Partial<Subscription>) => Promise<void>;
   cancelSubscription: (id: string) => Promise<void>;
@@ -25,6 +28,7 @@ const StoreContext = createContext<StoreContextType | null>(null);
 
 const STORAGE_KEY = "curator_subscriptions";
 const PREFS_KEY = "curator_alert_prefs";
+const CURRENCY_KEY = "curator_currency";
 
 export function StoreProvider({
   children,
@@ -40,6 +44,20 @@ export function StoreProvider({
     MOCK_USER.alertPreferences
   );
   const [teamId, setTeamId] = useState<string | null>(initialTeamId ?? null);
+  const [currency, setCurrencyState] = useState<Currency>("INR");
+
+  // Load currency preference from localStorage
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(CURRENCY_KEY);
+      if (stored === "USD" || stored === "INR") setCurrencyState(stored);
+    } catch {}
+  }, []);
+
+  const setCurrency = (c: Currency) => {
+    setCurrencyState(c);
+    try { localStorage.setItem(CURRENCY_KEY, c); } catch {}
+  };
 
   // Fetch from Supabase on mount when authenticated
   useEffect(() => {
@@ -203,6 +221,8 @@ export function StoreProvider({
         subscriptions,
         alertPreferences,
         teamId,
+        currency,
+        setCurrency,
         addSubscription,
         updateSubscription,
         cancelSubscription,
