@@ -1,38 +1,38 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useStore } from "@/lib/store";
+import { formatCurrency } from "@/lib/currency";
 import { SubscriptionCategory } from "@/types";
 import { getDaysUntilRenewal, computeNextRenewal } from "@/lib/mockData";
+import { createClient } from "@/lib/supabase/client";
 
 const CATEGORIES: SubscriptionCategory[] = [
-  "Entertainment",
-  "Productivity",
-  "Design",
-  "Shopping",
-  "Health",
-  "Gaming",
-  "News",
-  "Other",
+  "Entertainment", "Productivity", "Design", "Shopping",
+  "Health", "Gaming", "News", "Other",
 ];
 
 const CATEGORY_ICONS: Record<string, string> = {
-  Entertainment: "movie",
-  Productivity: "work",
-  Design: "palette",
-  Shopping: "shopping_bag",
-  Health: "fitness_center",
-  Gaming: "sports_esports",
-  News: "newspaper",
-  Other: "category",
+  Entertainment: "movie", Productivity: "work", Design: "palette",
+  Shopping: "shopping_bag", Health: "fitness_center", Gaming: "sports_esports",
+  News: "newspaper", Other: "category",
 };
 
 export default function SubscriptionsPage() {
-  const { subscriptions } = useStore();
+  const { subscriptions, currency } = useStore();
+  const router = useRouter();
   const [filter, setFilter] = useState<"all" | "active" | "cancelled">("all");
   const [category, setCategory] = useState<string>("all");
   const [sort, setSort] = useState<"name" | "amount" | "renewal">("renewal");
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  useEffect(() => {
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL) return;
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => setIsLoggedIn(!!data.user));
+  }, []);
 
   const filtered = subscriptions
     .filter((s) => {
@@ -60,16 +60,26 @@ export default function SubscriptionsPage() {
         <div>
           <h2 className="text-3xl font-extrabold font-headline">All Subscriptions</h2>
           <p className="text-on-surface-variant mt-1">
-            {totalActive} active · ${totalMonthly.toFixed(2)}/mo
+            {totalActive} active · {formatCurrency(totalMonthly, currency)}/mo
           </p>
         </div>
-        <Link
-          href="/subscriptions/add"
-          className="flex items-center gap-2 px-6 py-3 bg-gradient-to-br from-primary to-primary-container text-white rounded-xl font-bold shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all"
-        >
-          <span className="material-symbols-outlined text-sm">add</span>
-          Add Subscription
-        </Link>
+        {isLoggedIn ? (
+          <Link
+            href="/subscriptions/add"
+            className="flex items-center gap-2 px-6 py-3 bg-gradient-to-br from-primary to-primary-container text-white rounded-xl font-bold shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all"
+          >
+            <span className="material-symbols-outlined text-sm">add</span>
+            Add Subscription
+          </Link>
+        ) : (
+          <button
+            onClick={() => router.push("/login")}
+            className="flex items-center gap-2 px-6 py-3 bg-surface-container text-on-surface-variant rounded-xl font-bold hover:bg-surface-container-high transition-all"
+          >
+            <span className="material-symbols-outlined text-sm">lock</span>
+            Sign in to add
+          </button>
+        )}
       </div>
 
       {/* Filters */}
@@ -135,13 +145,13 @@ export default function SubscriptionsPage() {
       {/* Grid */}
       {filtered.length === 0 ? (
         <div className="text-center py-20">
-          <span className="material-symbols-outlined text-6xl text-on-surface-variant/30">
-            subscriptions
-          </span>
+          <span className="material-symbols-outlined text-6xl text-on-surface-variant/30">subscriptions</span>
           <p className="text-on-surface-variant mt-4">No subscriptions found.</p>
-          <Link href="/subscriptions/add" className="mt-4 inline-block text-primary font-bold">
-            Add one now →
-          </Link>
+          {isLoggedIn && (
+            <Link href="/subscriptions/add" className="mt-4 inline-block text-primary font-bold">
+              Add one now →
+            </Link>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -183,7 +193,7 @@ export default function SubscriptionsPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-2xl font-bold font-headline text-primary">
-                      ${sub.amount.toFixed(2)}
+                      {formatCurrency(sub.amount, currency)}
                     </p>
                     <p className="text-[10px] text-on-surface-variant uppercase tracking-wider">
                       {sub.billingCycle}
@@ -193,9 +203,7 @@ export default function SubscriptionsPage() {
                     <p className="text-xs text-on-surface-variant">Next renewal</p>
                     <p className="text-sm font-bold">
                       {new Date(nextRenewal).toLocaleDateString("en-US", {
-                        month: "short",
-                        day: "numeric",
-                        year: "numeric",
+                        month: "short", day: "numeric", year: "numeric",
                       })}
                     </p>
                   </div>

@@ -8,6 +8,7 @@ const navLinks = [
   { href: "/subscriptions", icon: "subscriptions", label: "Subscriptions" },
   { href: "/reminders", icon: "event_upcoming", label: "Reminders" },
   { href: "/insights", icon: "query_stats", label: "Insights" },
+  { href: "/team", icon: "group", label: "Team" },
 ];
 
 export default function SideNav() {

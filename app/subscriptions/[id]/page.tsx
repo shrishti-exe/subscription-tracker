@@ -1,19 +1,17 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useStore } from "@/lib/store";
+import { formatCurrency } from "@/lib/currency";
 import { computeNextRenewal, getDaysUntilRenewal, generatePaymentHistory } from "@/lib/mockData";
+import { createClient } from "@/lib/supabase/client";
 
 const CATEGORY_ICONS: Record<string, string> = {
-  Entertainment: "movie",
-  Productivity: "work",
-  Design: "palette",
-  Shopping: "shopping_bag",
-  Health: "fitness_center",
-  Gaming: "sports_esports",
-  News: "newspaper",
-  Other: "category",
+  Entertainment: "movie", Productivity: "work", Design: "palette",
+  Shopping: "shopping_bag", Health: "fitness_center", Gaming: "sports_esports",
+  News: "newspaper", Other: "category",
 };
 
 function SpendingChart({ payments }: { payments: { date: string; amount: number; status: string }[] }) {
@@ -53,7 +51,14 @@ function SpendingChart({ payments }: { payments: { date: string; amount: number;
 export default function SubscriptionDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const { subscriptions, cancelSubscription, updateSubscription, deleteSubscription } = useStore();
+  const { subscriptions, cancelSubscription, updateSubscription, deleteSubscription, currency } = useStore();
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  useEffect(() => {
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL) return;
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => setIsLoggedIn(!!data.user));
+  }, []);
 
   const sub = subscriptions.find((s) => s.id === params.id);
 
@@ -71,24 +76,17 @@ export default function SubscriptionDetailPage() {
   const nextRenewal = computeNextRenewal(sub.startDate, sub.billingCycle);
   const daysLeft = getDaysUntilRenewal(sub.startDate, sub.billingCycle);
 
-  // Use recorded payment history if available, otherwise generate from start date
   const payments =
     sub.paymentHistory.length > 0
       ? sub.paymentHistory
       : generatePaymentHistory(sub.id, sub.name, sub.startDate, sub.billingCycle, sub.amount);
 
   const yearToDate = payments
-    .filter(
-      (p) =>
-        p.status === "success" &&
-        new Date(p.date).getFullYear() === new Date().getFullYear()
-    )
+    .filter((p) => p.status === "success" && new Date(p.date).getFullYear() === new Date().getFullYear())
     .reduce((sum, p) => sum + p.amount, 0);
 
-  // How long they've been subscribed (in months)
   const startMs = new Date(sub.startDate).getTime();
-  const nowMs = Date.now();
-  const monthsSubscribed = Math.floor((nowMs - startMs) / (1000 * 60 * 60 * 24 * 30.44));
+  const monthsSubscribed = Math.floor((Date.now() - startMs) / (1000 * 60 * 60 * 24 * 30.44));
 
   const handleCancel = () => {
     if (confirm(`Cancel ${sub.name}? This action will mark it as cancelled.`)) {
@@ -113,39 +111,47 @@ export default function SubscriptionDetailPage() {
       {/* Breadcrumb & Actions */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
         <div className="flex items-center gap-2 text-on-surface-variant text-sm">
-          <Link href="/subscriptions" className="hover:text-primary">
-            Subscriptions
-          </Link>
+          <Link href="/subscriptions" className="hover:text-primary">Subscriptions</Link>
           <span className="material-symbols-outlined text-xs">chevron_right</span>
           <span className="text-on-surface font-semibold">{sub.name}</span>
         </div>
-        <div className="flex gap-3">
-          <button className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-on-surface bg-surface-container hover:bg-surface-container-high transition-all active:scale-95 font-medium text-sm">
-            <span className="material-symbols-outlined text-[20px]">edit</span>
-            Edit
-          </button>
-          {sub.status === "active" && (
-            <button
-              onClick={handleCancel}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-error bg-error-container/30 hover:bg-error-container/50 transition-all active:scale-95 font-medium text-sm"
-            >
-              <span className="material-symbols-outlined text-[20px]">cancel</span>
-              Cancel
+
+        {isLoggedIn ? (
+          <div className="flex gap-3">
+            <button className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-on-surface bg-surface-container hover:bg-surface-container-high transition-all active:scale-95 font-medium text-sm">
+              <span className="material-symbols-outlined text-[20px]">edit</span>
+              Edit
             </button>
-          )}
+            {sub.status === "active" && (
+              <button
+                onClick={handleCancel}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-error bg-error-container/30 hover:bg-error-container/50 transition-all active:scale-95 font-medium text-sm"
+              >
+                <span className="material-symbols-outlined text-[20px]">cancel</span>
+                Cancel
+              </button>
+            )}
+            <button
+              onClick={handleDelete}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-error bg-error-container/30 hover:bg-error-container/60 transition-all active:scale-95 font-medium text-sm"
+            >
+              <span className="material-symbols-outlined text-[20px]">delete</span>
+              Delete
+            </button>
+          </div>
+        ) : (
           <button
-            onClick={handleDelete}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-error bg-error-container/30 hover:bg-error-container/60 transition-all active:scale-95 font-medium text-sm"
+            onClick={() => router.push("/login")}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-on-surface-variant bg-surface-container hover:bg-surface-container-high transition-all font-medium text-sm"
           >
-            <span className="material-symbols-outlined text-[20px]">delete</span>
-            Delete
+            <span className="material-symbols-outlined text-[20px]">lock</span>
+            Sign in to edit or delete
           </button>
-        </div>
+        )}
       </div>
 
       {/* Hero */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-        {/* Identity Card */}
         <div className="lg:col-span-2 bg-surface-container-lowest rounded-3xl p-8 flex flex-col md:flex-row items-start md:items-center gap-8 shadow-sm">
           <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-primary/10 to-primary-container/20 flex items-center justify-center shrink-0">
             <span className="material-symbols-outlined text-primary" style={{ fontSize: "40px" }}>
@@ -154,9 +160,7 @@ export default function SubscriptionDetailPage() {
           </div>
           <div className="flex-1">
             <div className="flex items-center gap-3 mb-1 flex-wrap">
-              <h1 className="text-4xl font-extrabold font-headline tracking-tight text-on-surface">
-                {sub.name}
-              </h1>
+              <h1 className="text-4xl font-extrabold font-headline tracking-tight text-on-surface">{sub.name}</h1>
               <span className="px-3 py-1 bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-widest rounded-full">
                 {sub.category}
               </span>
@@ -171,7 +175,7 @@ export default function SubscriptionDetailPage() {
                   {sub.billingCycle} Amount
                 </p>
                 <p className="text-2xl font-bold font-headline text-primary">
-                  ${sub.amount.toFixed(2)}
+                  {formatCurrency(sub.amount, currency)}
                 </p>
               </div>
               <div>
@@ -180,9 +184,7 @@ export default function SubscriptionDetailPage() {
                 </p>
                 <p className="text-2xl font-bold font-headline text-on-surface">
                   {new Date(nextRenewal).toLocaleDateString("en-US", {
-                    month: "short",
-                    day: "numeric",
-                    year: "numeric",
+                    month: "short", day: "numeric", year: "numeric",
                   })}
                 </p>
               </div>
@@ -190,7 +192,6 @@ export default function SubscriptionDetailPage() {
           </div>
         </div>
 
-        {/* Status Card */}
         <div
           className={`bg-surface-container-lowest rounded-3xl p-8 shadow-sm flex flex-col justify-between border-l-4 ${
             sub.status === "active" ? "border-primary" : "border-error"
@@ -198,9 +199,7 @@ export default function SubscriptionDetailPage() {
         >
           <div>
             <div className="flex items-center justify-between mb-6">
-              <span className="text-sm font-label font-semibold text-on-surface">
-                Subscription Status
-              </span>
+              <span className="text-sm font-label font-semibold text-on-surface">Subscription Status</span>
               <div className={`flex items-center gap-1.5 ${sub.status === "active" ? "text-teal-600" : "text-error"}`}>
                 <span className={`w-2 h-2 rounded-full ${sub.status === "active" ? "bg-teal-600" : "bg-error"}`} />
                 <span className="text-xs font-bold uppercase">{sub.status}</span>
@@ -209,7 +208,7 @@ export default function SubscriptionDetailPage() {
             <div className="space-y-4">
               <div className="flex justify-between items-end">
                 <span className="text-sm text-on-surface-variant">Year to date spend</span>
-                <span className="font-headline font-bold">${yearToDate.toFixed(2)}</span>
+                <span className="font-headline font-bold">{formatCurrency(yearToDate, currency)}</span>
               </div>
               <div className="w-full bg-surface-container rounded-full h-2">
                 <div
@@ -218,9 +217,7 @@ export default function SubscriptionDetailPage() {
                 />
               </div>
               <p className="text-[11px] text-on-surface-variant italic">
-                {daysLeft === 0
-                  ? "Renews today"
-                  : `Next bill due in ${daysLeft} day${daysLeft !== 1 ? "s" : ""}`}
+                {daysLeft === 0 ? "Renews today" : `Next bill due in ${daysLeft} day${daysLeft !== 1 ? "s" : ""}`}
               </p>
             </div>
           </div>
@@ -234,20 +231,14 @@ export default function SubscriptionDetailPage() {
 
       {/* Bento Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Spending Trend */}
         <div className="lg:col-span-8 bg-surface-container-lowest rounded-3xl p-8 shadow-sm">
-          <div className="flex items-center justify-between mb-8">
-            <h3 className="text-xl font-bold font-headline text-on-surface">Spending Trend</h3>
-          </div>
+          <h3 className="text-xl font-bold font-headline text-on-surface mb-8">Spending Trend</h3>
           <SpendingChart payments={payments} />
         </div>
 
-        {/* Details Sidebar */}
         <div className="lg:col-span-4 space-y-6">
           <div className="bg-surface-container-lowest rounded-3xl p-6 shadow-sm">
-            <h4 className="text-sm font-bold font-headline text-on-surface mb-4">
-              Subscription Details
-            </h4>
+            <h4 className="text-sm font-bold font-headline text-on-surface mb-4">Subscription Details</h4>
             <ul className="space-y-4">
               <li className="flex items-center gap-3">
                 <span className="material-symbols-outlined text-primary-container">category</span>
@@ -262,9 +253,7 @@ export default function SubscriptionDetailPage() {
                   <p className="text-[10px] font-label text-on-surface-variant uppercase tracking-tighter">Started</p>
                   <p className="text-sm font-semibold">
                     {new Date(sub.startDate).toLocaleDateString("en-US", {
-                      month: "long",
-                      day: "numeric",
-                      year: "numeric",
+                      month: "long", day: "numeric", year: "numeric",
                     })}
                   </p>
                 </div>
@@ -288,40 +277,33 @@ export default function SubscriptionDetailPage() {
             </ul>
           </div>
 
-          {/* Upcoming renewal alert */}
           {sub.status === "active" && daysLeft <= 7 && (
             <div className="bg-tertiary-container/10 rounded-3xl p-6 shadow-sm border-l-4 border-tertiary">
               <div className="flex items-start gap-3">
                 <span className="material-symbols-outlined text-tertiary">event_upcoming</span>
                 <div>
-                  <h4 className="text-sm font-bold text-tertiary font-headline mb-1">
-                    Upcoming Renewal
-                  </h4>
+                  <h4 className="text-sm font-bold text-tertiary font-headline mb-1">Upcoming Renewal</h4>
                   <p className="text-xs text-on-surface-variant leading-relaxed">
                     Renews on{" "}
-                    {new Date(nextRenewal).toLocaleDateString("en-US", {
-                      month: "short",
-                      day: "numeric",
-                    })}{" "}
-                    for <span className="font-bold">${sub.amount.toFixed(2)}</span>.
+                    {new Date(nextRenewal).toLocaleDateString("en-US", { month: "short", day: "numeric" })}{" "}
+                    for <span className="font-bold">{formatCurrency(sub.amount, currency)}</span>.
                   </p>
-                  <button
-                    onClick={handleToggleAutoRenew}
-                    className="mt-3 text-xs font-bold text-tertiary underline decoration-2 underline-offset-4"
-                  >
-                    {sub.autoRenew ? "Turn off auto-renew" : "Turn on auto-renew"}
-                  </button>
+                  {isLoggedIn && (
+                    <button
+                      onClick={handleToggleAutoRenew}
+                      className="mt-3 text-xs font-bold text-tertiary underline decoration-2 underline-offset-4"
+                    >
+                      {sub.autoRenew ? "Turn off auto-renew" : "Turn on auto-renew"}
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
           )}
         </div>
 
-        {/* Payment History */}
         <div className="lg:col-span-12 bg-surface-container-lowest rounded-3xl p-8 shadow-sm">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-xl font-bold font-headline text-on-surface">Payment History</h3>
-          </div>
+          <h3 className="text-xl font-bold font-headline text-on-surface mb-6">Payment History</h3>
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
@@ -337,27 +319,21 @@ export default function SubscriptionDetailPage() {
                   <tr key={payment.id}>
                     <td className="py-5 font-medium text-sm">
                       {new Date(payment.date).toLocaleDateString("en-US", {
-                        month: "short",
-                        day: "numeric",
-                        year: "numeric",
+                        month: "short", day: "numeric", year: "numeric",
                       })}
                     </td>
                     <td className="py-5 text-sm">{payment.description}</td>
                     <td className="py-5">
-                      <span
-                        className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase ${
-                          payment.status === "success"
-                            ? "bg-teal-50 text-teal-700"
-                            : payment.status === "pending"
-                            ? "bg-surface-container-high text-on-surface-variant"
-                            : "bg-error-container/30 text-error"
-                        }`}
-                      >
+                      <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase ${
+                        payment.status === "success" ? "bg-teal-50 text-teal-700"
+                          : payment.status === "pending" ? "bg-surface-container-high text-on-surface-variant"
+                          : "bg-error-container/30 text-error"
+                      }`}>
                         {payment.status}
                       </span>
                     </td>
                     <td className="py-5 text-right font-headline font-bold">
-                      ${payment.amount.toFixed(2)}
+                      {formatCurrency(payment.amount, currency)}
                     </td>
                   </tr>
                 ))}

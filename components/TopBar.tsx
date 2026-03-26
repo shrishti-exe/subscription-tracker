@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 
 export default function TopBar() {
   const [query, setQuery] = useState("");
-  const { subscriptions } = useStore();
+  const { subscriptions, currency, setCurrency } = useStore();
   const router = useRouter();
 
   const filtered = query.length > 1
@@ -49,7 +49,30 @@ export default function TopBar() {
           )}
         </div>
       </div>
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-3">
+        {/* Currency toggle */}
+        <div className="flex items-center bg-surface-container-low rounded-xl p-1 gap-0.5">
+          <button
+            onClick={() => setCurrency("INR")}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              currency === "INR"
+                ? "bg-primary text-white shadow-sm"
+                : "text-on-surface-variant hover:text-on-surface"
+            }`}
+          >
+            ₹ INR
+          </button>
+          <button
+            onClick={() => setCurrency("USD")}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              currency === "USD"
+                ? "bg-primary text-white shadow-sm"
+                : "text-on-surface-variant hover:text-on-surface"
+            }`}
+          >
+            $ USD
+          </button>
+        </div>
         <button className="p-2 text-slate-500 hover:bg-teal-50/50 rounded-full transition-all active:scale-95">
           <span className="material-symbols-outlined">notifications</span>
         </button>
