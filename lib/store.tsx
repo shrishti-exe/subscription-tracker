@@ -59,11 +59,31 @@ export function StoreProvider({
     try { localStorage.setItem(CURRENCY_KEY, c); } catch {}
   };
 
-  // Fetch from Supabase on mount when authenticated
+  // If teamId wasn't provided server-side, fetch it client-side
   useEffect(() => {
-    if (SUPABASE_CONFIGURED && teamId) {
+    if (!SUPABASE_CONFIGURED) return;
+    if (teamId) {
       refreshSubscriptions(teamId);
+      return;
     }
+    // Fallback: resolve teamId on the client
+    (async () => {
+      try {
+        const { createClient } = await import("@/lib/supabase/client");
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        const { data: membership } = await supabase
+          .from("team_members")
+          .select("team_id")
+          .eq("user_id", user.id)
+          .single();
+        if (membership?.team_id) {
+          setTeamId(membership.team_id);
+          // teamId state update will re-trigger this effect
+        }
+      } catch {}
+    })();
   }, [teamId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load from localStorage on mount (fallback / demo mode)
