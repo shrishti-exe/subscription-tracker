@@ -274,6 +274,20 @@ export default function SubscriptionDetailPage() {
                   </div>
                 </li>
               )}
+              {sub.createdBy && (
+                <li className="flex items-center gap-3">
+                  <span className="material-symbols-outlined text-primary-container">person_add</span>
+                  <div>
+                    <p className="text-[10px] font-label text-on-surface-variant uppercase tracking-tighter">Added By</p>
+                    <p className="text-sm font-semibold">
+                      {sub.createdBy.includes("@")
+                        ? sub.createdBy.split("@")[0].split(".").map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ")
+                        : sub.createdBy}
+                    </p>
+                    <p className="text-[10px] text-on-surface-variant">{sub.createdBy}</p>
+                  </div>
+                </li>
+              )}
             </ul>
           </div>
 
