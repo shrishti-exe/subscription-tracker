@@ -101,10 +101,7 @@ export function StoreProvider({
       const { createClient } = await import("@/lib/supabase/client");
       const supabase = createClient();
       const { data, error } = await supabase
-        .from("subscriptions")
-        .select("*")
-        .eq("team_id", activeTeamId)
-        .order("created_at", { ascending: false });
+        .rpc("get_subscriptions_with_creator", { p_team_id: activeTeamId });
 
       if (!error && data) {
         // Map snake_case DB fields to camelCase
@@ -119,6 +116,7 @@ export function StoreProvider({
           status: row.status,
           autoRenew: row.auto_renew,
           notes: row.notes,
+          createdBy: row.created_by_email ?? undefined,
           paymentHistory: [],
         }));
         setSubscriptions(mapped);
@@ -131,6 +129,7 @@ export function StoreProvider({
       try {
         const { createClient } = await import("@/lib/supabase/client");
         const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
         const { data, error } = await supabase
           .from("subscriptions")
           .insert({
@@ -144,6 +143,7 @@ export function StoreProvider({
             status: s.status,
             auto_renew: s.autoRenew,
             notes: s.notes,
+            created_by: user?.id ?? null,
           })
           .select()
           .single();

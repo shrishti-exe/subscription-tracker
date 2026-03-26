@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { useStore } from "@/lib/store";
+import { formatCurrency } from "@/lib/currency";
 
 interface Member {
   id: string;
@@ -11,11 +13,21 @@ interface Member {
   avatar?: string;
 }
 
+function nameFromEmail(email: string): string {
+  if (!email.includes("@")) return "Unknown";
+  return email
+    .split("@")[0]
+    .split(".")
+    .map((w: string) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
 export default function TeamPage() {
   const [members, setMembers] = useState<Member[]>([]);
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
   const [teamName, setTeamName] = useState<string>("Dognosis");
   const [loading, setLoading] = useState(true);
+  const { subscriptions, currency } = useStore();
 
   useEffect(() => {
     const supabase = createClient();
@@ -44,13 +56,7 @@ export default function TeamPage() {
       if (memberRows) {
         const list: Member[] = memberRows.map((row: any) => {
           const email: string = row.email || "Unknown";
-          const name = email.includes("@")
-            ? email.split("@")[0]
-                .split(".")
-                .map((w: string) => w.charAt(0).toUpperCase() + w.slice(1))
-                .join(" ")
-            : "Unknown";
-          return { id: row.member_id, email, name, role: row.role };
+          return { id: row.member_id, email, name: nameFromEmail(email), role: row.role };
         });
         // Sort: owners first, then alphabetically
         list.sort((a, b) => {
@@ -155,6 +161,50 @@ export default function TeamPage() {
       <p className="text-xs text-on-surface-variant/50 text-center mt-6">
         Anyone who signs in with @dognosis.tech is automatically added to this team.
       </p>
+
+      {/* Subscription Activity */}
+      <div className="mt-10">
+        <h3 className="text-xl font-extrabold font-headline mb-4">Subscription Activity</h3>
+        <p className="text-sm text-on-surface-variant mb-5">Who added each subscription to the tracker.</p>
+
+        <div className="bg-surface-container-lowest rounded-3xl shadow-sm overflow-hidden">
+          {subscriptions.length === 0 ? (
+            <div className="p-10 text-center text-on-surface-variant">
+              <span className="material-symbols-outlined text-5xl mb-4 block opacity-30">receipt_long</span>
+              No subscriptions tracked yet.
+            </div>
+          ) : (
+            <div className="divide-y divide-surface-container/50">
+              {subscriptions.map((sub) => {
+                const addedByName = sub.createdBy ? nameFromEmail(sub.createdBy) : null;
+                return (
+                  <div key={sub.id} className="flex items-center gap-4 px-6 py-4 hover:bg-surface-container-low transition-all">
+                    <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                      <span className="material-symbols-outlined text-primary text-[20px]">subscriptions</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-sm truncate">{sub.name}</p>
+                      <p className="text-xs text-on-surface-variant truncate">
+                        {sub.billingCycle} · {formatCurrency(sub.amount, currency)}
+                      </p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      {addedByName ? (
+                        <>
+                          <p className="text-xs font-semibold text-on-surface">{addedByName}</p>
+                          <p className="text-[10px] text-on-surface-variant">{sub.createdBy}</p>
+                        </>
+                      ) : (
+                        <p className="text-xs text-on-surface-variant italic">Unknown</p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

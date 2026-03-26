@@ -25,6 +25,7 @@ export interface Subscription {
   paymentHistory: Payment[];
   autoRenew: boolean;
   notes?: string;
+  createdBy?: string; // email of the user who added this subscription
 }
 
 export interface Payment {
