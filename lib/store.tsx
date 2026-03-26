@@ -5,10 +5,8 @@ import { Subscription, AlertPreferences } from "@/types";
 import { MOCK_SUBSCRIPTIONS, MOCK_USER } from "./mockData";
 import { Currency } from "./currency";
 
-const SUPABASE_CONFIGURED =
-  typeof window !== "undefined"
-    ? !!process.env.NEXT_PUBLIC_SUPABASE_URL
-    : false;
+// NEXT_PUBLIC_ vars are inlined at build time — safe to use without window check
+const SUPABASE_CONFIGURED = !!process.env.NEXT_PUBLIC_SUPABASE_URL;
 
 interface StoreContextType {
   subscriptions: Subscription[];
@@ -37,9 +35,9 @@ export function StoreProvider({
   children: React.ReactNode;
   initialTeamId?: string | null;
 }) {
-  const [subscriptions, setSubscriptions] = useState<Subscription[]>(
-    SUPABASE_CONFIGURED ? [] : MOCK_SUBSCRIPTIONS
-  );
+  // Always start with [] to avoid SSR/client hydration mismatch.
+  // Demo mode (no Supabase) loads from localStorage in the effect below.
+  const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [alertPreferences, setAlertPreferences] = useState<AlertPreferences>(
     MOCK_USER.alertPreferences
   );
@@ -91,7 +89,7 @@ export function StoreProvider({
     if (!SUPABASE_CONFIGURED) {
       try {
         const stored = localStorage.getItem(STORAGE_KEY);
-        if (stored) setSubscriptions(JSON.parse(stored));
+        setSubscriptions(stored ? JSON.parse(stored) : MOCK_SUBSCRIPTIONS);
         const prefs = localStorage.getItem(PREFS_KEY);
         if (prefs) setAlertPreferences(JSON.parse(prefs));
       } catch {}
@@ -147,56 +145,27 @@ export function StoreProvider({
   const addSubscription = useCallback(async (s: Omit<Subscription, "id" | "paymentHistory">) => {
     if (SUPABASE_CONFIGURED) {
       try {
-        const { createClient } = await import("@/lib/supabase/client");
-        const supabase = createClient();
-        const { data: { user } } = await supabase.auth.getUser();
-
-        if (user) {
-          // Resolve teamId from state or look it up fresh
-          let activeTeamId = teamId;
-          if (!activeTeamId) {
-            const { data: membership } = await supabase
-              .from("team_members")
-              .select("team_id")
-              .eq("user_id", user.id)
-              .single();
-            activeTeamId = membership?.team_id ?? null;
-            if (activeTeamId) setTeamId(activeTeamId);
-          }
-
-          if (activeTeamId) {
-            const { data, error } = await supabase
-              .from("subscriptions")
-              .insert({
-                team_id: activeTeamId,
-                name: s.name,
-                amount: s.amount,
-                billing_cycle: s.billingCycle,
-                start_date: s.startDate,
-                category: s.category,
-                linked_account: s.linkedAccount,
-                status: s.status,
-                auto_renew: s.autoRenew,
-                notes: s.notes,
-                created_by: user.id,
-              })
-              .select()
-              .single();
-
-            if (!error && data) {
-              await refreshSubscriptions(activeTeamId);
-              return;
-            }
-            // Log insert error to console for debugging
-            if (error) console.error("Subscription insert error:", error);
-          }
-        }
+        const { createSubscription } = await import("@/app/actions/subscriptions");
+        const result = await createSubscription({
+          name: s.name,
+          amount: s.amount,
+          billingCycle: s.billingCycle,
+          startDate: s.startDate,
+          category: s.category,
+          linkedAccount: s.linkedAccount,
+          status: s.status,
+          autoRenew: s.autoRenew,
+          notes: s.notes,
+        });
+        if (result.teamId && !teamId) setTeamId(result.teamId);
+        await refreshSubscriptions(result.teamId);
+        return;
       } catch (e) {
         console.error("addSubscription error:", e);
       }
     }
 
-    // localStorage fallback
+    // localStorage fallback (demo mode)
     const newSub: Subscription = { ...s, id: `sub_${Date.now()}`, paymentHistory: [] };
     setSubscriptions((prev) => [newSub, ...prev]);
   }, [teamId, refreshSubscriptions]);
