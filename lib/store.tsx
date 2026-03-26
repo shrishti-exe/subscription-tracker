@@ -105,7 +105,7 @@ export function StoreProvider({
 
       if (!error && data) {
         // Map snake_case DB fields to camelCase
-        const mapped: Subscription[] = data.map((row) => ({
+        const mapped: Subscription[] = (data as any[]).map((row) => ({
           id: row.id,
           name: row.name,
           amount: row.amount,
