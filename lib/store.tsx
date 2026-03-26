@@ -57,32 +57,12 @@ export function StoreProvider({
     try { localStorage.setItem(CURRENCY_KEY, c); } catch {}
   };
 
-  // If teamId wasn't provided server-side, fetch it client-side
+  // Load subscriptions on mount via API route (handles auth server-side)
   useEffect(() => {
-    if (!SUPABASE_CONFIGURED) return;
-    if (teamId) {
-      refreshSubscriptions(teamId);
-      return;
+    if (SUPABASE_CONFIGURED) {
+      refreshSubscriptions();
     }
-    // Fallback: resolve teamId on the client
-    (async () => {
-      try {
-        const { createClient } = await import("@/lib/supabase/client");
-        const supabase = createClient();
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
-        const { data: membership } = await supabase
-          .from("team_members")
-          .select("team_id")
-          .eq("user_id", user.id)
-          .single();
-        if (membership?.team_id) {
-          setTeamId(membership.team_id);
-          // teamId state update will re-trigger this effect
-        }
-      } catch {}
-    })();
-  }, [teamId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load from localStorage on mount (fallback / demo mode)
   useEffect(() => {
@@ -112,54 +92,45 @@ export function StoreProvider({
   }, [alertPreferences]);
 
   const refreshSubscriptions = useCallback(async (tid?: string) => {
-    const activeTeamId = tid ?? teamId;
-    if (!SUPABASE_CONFIGURED || !activeTeamId) return;
-
+    if (!SUPABASE_CONFIGURED) return;
     try {
-      const { createClient } = await import("@/lib/supabase/client");
-      const supabase = createClient();
-      const { data, error } = await supabase
-        .rpc("get_subscriptions_with_creator", { p_team_id: activeTeamId });
-
-      if (!error && data) {
-        // Map snake_case DB fields to camelCase
-        const mapped: Subscription[] = (data as any[]).map((row) => ({
-          id: row.id,
-          name: row.name,
-          amount: row.amount,
-          billingCycle: row.billing_cycle,
-          startDate: row.start_date,
-          category: row.category,
-          linkedAccount: row.linked_account,
-          status: row.status,
-          autoRenew: row.auto_renew,
-          notes: row.notes,
-          createdBy: row.created_by_email ?? undefined,
-          paymentHistory: [],
-        }));
-        setSubscriptions(mapped);
-      }
-    } catch {}
+      const res = await fetch("/api/subscriptions");
+      if (!res.ok) { console.error("refreshSubscriptions failed:", res.status, await res.text()); return; }
+      const json = await res.json();
+      if (json.teamId && !tid && !teamId) setTeamId(json.teamId);
+      const mapped: Subscription[] = (json.subscriptions ?? []).map((row: any) => ({
+        id: row.id,
+        name: row.name,
+        amount: row.amount,
+        billingCycle: row.billing_cycle,
+        startDate: row.start_date,
+        category: row.category,
+        linkedAccount: row.linked_account,
+        status: row.status,
+        autoRenew: row.auto_renew,
+        notes: row.notes,
+        createdBy: row.created_by_email ?? undefined,
+        paymentHistory: [],
+      }));
+      setSubscriptions(mapped);
+    } catch (e) { console.error("refreshSubscriptions error:", e); }
   }, [teamId]);
 
   const addSubscription = useCallback(async (s: Omit<Subscription, "id" | "paymentHistory">) => {
     if (SUPABASE_CONFIGURED) {
       try {
-        const { createSubscription } = await import("@/app/actions/subscriptions");
-        const result = await createSubscription({
-          name: s.name,
-          amount: s.amount,
-          billingCycle: s.billingCycle,
-          startDate: s.startDate,
-          category: s.category,
-          linkedAccount: s.linkedAccount,
-          status: s.status,
-          autoRenew: s.autoRenew,
-          notes: s.notes,
+        const res = await fetch("/api/subscriptions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(s),
         });
-        if (result.teamId && !teamId) setTeamId(result.teamId);
-        await refreshSubscriptions(result.teamId);
-        return;
+        const json = await res.json();
+        if (!res.ok) { console.error("addSubscription failed:", json); }
+        else {
+          if (json.teamId && !teamId) setTeamId(json.teamId);
+          await refreshSubscriptions();
+          return;
+        }
       } catch (e) {
         console.error("addSubscription error:", e);
       }
