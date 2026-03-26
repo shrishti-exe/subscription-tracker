@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 const tabs = [
   { href: "/", icon: "home", label: "Home" },
   { href: "/subscriptions", icon: "credit_card", label: "Subs" },
+  { href: "/team", icon: "group", label: "Team" },
   { href: "/reminders", icon: "notifications_active", label: "Alerts" },
   { href: "/insights", icon: "bar_chart", label: "Trends" },
 ];
@@ -24,7 +25,7 @@ export default function BottomNav() {
         <Link
           key={tab.href}
           href={tab.href}
-          className={`flex flex-col items-center justify-center px-4 py-2 transition-all rounded-2xl ${
+          className={`flex flex-col items-center justify-center px-3 py-2 transition-all rounded-2xl ${
             isActive(tab.href)
               ? "bg-teal-50 text-teal-700"
               : "text-slate-400 hover:bg-slate-50"
@@ -32,11 +33,7 @@ export default function BottomNav() {
         >
           <span
             className="material-symbols-outlined"
-            style={
-              isActive(tab.href)
-                ? { fontVariationSettings: "'FILL' 1" }
-                : undefined
-            }
+            style={isActive(tab.href) ? { fontVariationSettings: "'FILL' 1" } : undefined}
           >
             {tab.icon}
           </span>

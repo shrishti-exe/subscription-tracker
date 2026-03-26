@@ -32,6 +32,8 @@ export default function SettingsPage() {
   const [inviting, setInviting] = useState(false);
   const [tab, setTab] = useState<"workspace" | "billing" | "notifications">("workspace");
   const [toast, setToast] = useState("");
+  const [emailAlerts, setEmailAlerts] = useState(false);
+  const [savingAlerts, setSavingAlerts] = useState(false);
   const router = useRouter();
 
   const supabaseConfigured = !!process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -51,6 +53,13 @@ export default function SettingsPage() {
       setUser(data.user);
       if (data.user) {
         await loadTeams(data.user.id);
+        // Load notification preference
+        const { data: prefs } = await supabase
+          .from("user_preferences")
+          .select("email_alerts")
+          .eq("user_id", data.user.id)
+          .single();
+        if (prefs) setEmailAlerts(prefs.email_alerts);
       }
       setLoading(false);
     });
@@ -393,34 +402,70 @@ export default function SettingsPage() {
       {tab === "notifications" && (
         <div className="bg-surface-container-lowest rounded-3xl p-8 shadow-sm">
           <h3 className="font-bold font-headline mb-6">Notification Settings</h3>
-          <p className="text-sm text-on-surface-variant mb-4">
-            Configure your renewal alerts in the{" "}
-            <button
-              onClick={() => router.push("/reminders")}
-              className="text-primary font-bold underline underline-offset-2"
-            >
-              Reminders
-            </button>{" "}
-            tab.
-          </p>
-          <div className="space-y-4">
-            {[
-              { label: "Renewal reminders", desc: "Get alerted before subscriptions renew", enabled: true },
-              { label: "Weekly digest", desc: "Summary of upcoming renewals every Monday", enabled: false },
-              { label: "Budget alerts", desc: "Alert when monthly spend exceeds a threshold", enabled: false },
-            ].map((item) => (
-              <div key={item.label} className="flex items-center justify-between p-4 bg-surface-container-low rounded-2xl">
+          {!user ? (
+            <p className="text-sm text-on-surface-variant">
+              Sign in to manage your notification preferences.
+            </p>
+          ) : (
+            <div className="space-y-4">
+              {/* Email alerts — saved to Supabase */}
+              <div className="flex items-center justify-between p-4 bg-surface-container-low rounded-2xl">
                 <div>
-                  <p className="font-medium text-sm">{item.label}</p>
-                  <p className="text-xs text-on-surface-variant">{item.desc}</p>
+                  <p className="font-medium text-sm">Renewal reminders</p>
+                  <p className="text-xs text-on-surface-variant">
+                    Get an email before subscriptions renew (3 days in advance)
+                  </p>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer">
-                  <input type="checkbox" className="sr-only peer" defaultChecked={item.enabled} />
+                  <input
+                    type="checkbox"
+                    className="sr-only peer"
+                    checked={emailAlerts}
+                    disabled={savingAlerts}
+                    onChange={async (e) => {
+                      const val = e.target.checked;
+                      setEmailAlerts(val);
+                      setSavingAlerts(true);
+                      const supabase = createClient();
+                      await supabase
+                        .from("user_preferences")
+                        .update({ email_alerts: val })
+                        .eq("user_id", user.id);
+                      setSavingAlerts(false);
+                      showToast(val ? "Email reminders enabled" : "Email reminders disabled");
+                    }}
+                  />
                   <div className="w-11 h-6 bg-surface-container-high rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary" />
                 </label>
               </div>
-            ))}
-          </div>
+
+              <div className="flex items-center justify-between p-4 bg-surface-container-low rounded-2xl opacity-50">
+                <div>
+                  <p className="font-medium text-sm">Weekly digest</p>
+                  <p className="text-xs text-on-surface-variant">Summary of upcoming renewals every Monday</p>
+                </div>
+                <label className="relative inline-flex items-center cursor-not-allowed">
+                  <input type="checkbox" className="sr-only peer" disabled />
+                  <div className="w-11 h-6 bg-surface-container-high rounded-full peer" />
+                </label>
+              </div>
+
+              <div className="flex items-center justify-between p-4 bg-surface-container-low rounded-2xl opacity-50">
+                <div>
+                  <p className="font-medium text-sm">Budget alerts</p>
+                  <p className="text-xs text-on-surface-variant">Alert when monthly spend exceeds a threshold</p>
+                </div>
+                <label className="relative inline-flex items-center cursor-not-allowed">
+                  <input type="checkbox" className="sr-only peer" disabled />
+                  <div className="w-11 h-6 bg-surface-container-high rounded-full peer" />
+                </label>
+              </div>
+
+              <p className="text-xs text-on-surface-variant/60 pt-2">
+                Reminders are sent to <span className="font-bold">{user.email}</span>
+              </p>
+            </div>
+          )}
         </div>
       )}
     </div>

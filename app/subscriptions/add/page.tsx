@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useStore } from "@/lib/store";
 import { BillingCycle, SubscriptionCategory } from "@/types";
 import { computeNextRenewal } from "@/lib/mockData";
+import { currencySymbol, toUSD } from "@/lib/currency";
 
 const CATEGORIES: { label: SubscriptionCategory; icon: string }[] = [
   { label: "Entertainment", icon: "movie" },
@@ -19,7 +20,8 @@ const CATEGORIES: { label: SubscriptionCategory; icon: string }[] = [
 
 export default function AddSubscriptionPage() {
   const router = useRouter();
-  const { addSubscription } = useStore();
+  const { addSubscription, currency } = useStore();
+  const sym = currencySymbol(currency);
 
   const [name, setName] = useState("");
   const [amount, setAmount] = useState("");
@@ -41,7 +43,7 @@ export default function AddSubscriptionPage() {
 
     addSubscription({
       name: name.trim(),
-      amount: parseFloat(amount),
+      amount: toUSD(parseFloat(amount), currency),
       billingCycle,
       startDate,
       category,
@@ -127,7 +129,7 @@ export default function AddSubscriptionPage() {
                   </label>
                   <div className="relative">
                     <span className="absolute left-6 top-1/2 -translate-y-1/2 text-on-surface-variant font-bold text-lg">
-                      $
+                      {sym}
                     </span>
                     <input
                       className="w-full h-14 pl-12 pr-6 bg-surface-container-low border-none rounded-xl text-lg font-medium focus:ring-2 focus:ring-primary focus:bg-surface-container-lowest transition-all placeholder:text-outline-variant outline-none"
